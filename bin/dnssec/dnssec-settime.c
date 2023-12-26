@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -24,7 +26,6 @@
 #include <isc/file.h>
 #include <isc/hash.h>
 #include <isc/mem.h>
-#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/string.h>
 #include <isc/time.h>
@@ -41,7 +42,7 @@ const char *program = "dnssec-settime";
 
 static isc_mem_t *mctx = NULL;
 
-ISC_NORETURN static void
+noreturn static void
 usage(void);
 
 static void
@@ -201,7 +202,6 @@ main(int argc, char **argv) {
 	int prepub = -1;
 	int options;
 	dns_ttl_t ttl = 0;
-	isc_stdtime_t now;
 	isc_stdtime_t dstime = 0, dnskeytime = 0;
 	isc_stdtime_t krrsigtime = 0, zrrsigtime = 0;
 	isc_stdtime_t pub = 0, act = 0, rev = 0, inact = 0, del = 0;
@@ -237,6 +237,7 @@ main(int argc, char **argv) {
 	bool unsetdsadd = false, setdsadd = false;
 	bool unsetdsdel = false, setdsdel = false;
 	bool printdsadd = false, printdsdel = false;
+	isc_stdtime_t now = isc_stdtime_now();
 
 	options = DST_TYPE_PUBLIC | DST_TYPE_PRIVATE | DST_TYPE_STATE;
 
@@ -249,8 +250,6 @@ main(int argc, char **argv) {
 	setup_logging(mctx, &log);
 
 	isc_commandline_errprint = false;
-
-	isc_stdtime_get(&now);
 
 #define CMDLINE_FLAGS "A:D:d:E:fg:hI:i:K:k:L:P:p:R:r:S:suv:Vz:"
 	while ((ch = isc_commandline_parse(argc, argv, CMDLINE_FLAGS)) != -1) {
@@ -340,7 +339,7 @@ main(int argc, char **argv) {
 				fprintf(stderr, "%s: invalid argument -%c\n",
 					program, isc_commandline_option);
 			}
-		/* FALLTHROUGH */
+			FALLTHROUGH;
 		case 'h':
 			/* Does not return. */
 			usage();
@@ -542,7 +541,8 @@ main(int argc, char **argv) {
 	}
 
 	if (argc < isc_commandline_index + 1 ||
-	    argv[isc_commandline_index] == NULL) {
+	    argv[isc_commandline_index] == NULL)
+	{
 		fatal("The key file name was not specified");
 	}
 	if (argc > isc_commandline_index + 1) {
@@ -550,7 +550,8 @@ main(int argc, char **argv) {
 	}
 
 	if ((setgoal || setds || setdnskey || setkrrsig || setzrrsig) &&
-	    !write_state) {
+	    !write_state)
+	{
 		fatal("Options -g, -d, -k, -r and -z require -s to be set");
 	}
 

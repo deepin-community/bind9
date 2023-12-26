@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef DNS_CALLBACKS_H
-#define DNS_CALLBACKS_H 1
+#pragma once
 
 /*! \file dns/callbacks.h */
 
@@ -45,7 +46,7 @@ struct dns_rdatacallbacks {
 	 * to pass back information obtained from the file header
 	 */
 	dns_rawdatafunc_t rawdata;
-	dns_zone_t *	  zone;
+	dns_zone_t	 *zone;
 
 	/*%
 	 * dns_load_master / dns_rdata_fromtext call this to issue a error.
@@ -90,5 +91,3 @@ dns_rdatacallbacks_init_stdio(dns_rdatacallbacks_t *callbacks);
  */
 
 ISC_LANG_ENDDECLS
-
-#endif /* DNS_CALLBACKS_H */

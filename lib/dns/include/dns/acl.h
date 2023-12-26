@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef DNS_ACL_H
-#define DNS_ACL_H 1
+#pragma once
 
 /*****
 ***** Module Info
@@ -20,6 +21,8 @@
  * \brief
  * Address match list handling.
  */
+
+/* Add -DDNS_ACL_TRACE=1 to CFLAGS for detailed reference tracing */
 
 /***
  *** Imports
@@ -42,16 +45,22 @@
  ***/
 
 typedef enum {
-	dns_aclelementtype_ipprefix,
 	dns_aclelementtype_keyname,
 	dns_aclelementtype_nestedacl,
 	dns_aclelementtype_localhost,
 	dns_aclelementtype_localnets,
 #if defined(HAVE_GEOIP2)
-	dns_aclelementtype_geoip,
+	dns_aclelementtype_geoip
 #endif /* HAVE_GEOIP2 */
-	dns_aclelementtype_any
 } dns_aclelementtype_t;
+
+typedef struct dns_acl_port_transports {
+	in_port_t port;
+	uint32_t  transports;
+	bool encrypted; /* for protocols with optional encryption (e.g. HTTP) */
+	bool negative;
+	ISC_LINK(struct dns_acl_port_transports) link;
+} dns_acl_port_transports_t;
 
 typedef struct dns_aclipprefix dns_aclipprefix_t;
 
@@ -75,24 +84,28 @@ struct dns_aclelement {
 
 struct dns_acl {
 	unsigned int	  magic;
-	isc_mem_t *	  mctx;
-	isc_refcount_t	  refcount;
-	dns_iptable_t *	  iptable;
+	isc_mem_t	 *mctx;
+	isc_refcount_t	  references;
+	dns_iptable_t	 *iptable;
 	dns_aclelement_t *elements;
 	bool		  has_negatives;
 	unsigned int	  alloc;	 /*%< Elements allocated */
 	unsigned int	  length;	 /*%< Elements initialized */
-	char *		  name;		 /*%< Temporary use only */
+	char		 *name;		 /*%< Temporary use only */
 	ISC_LINK(dns_acl_t) nextincache; /*%< Ditto */
+	ISC_LIST(dns_acl_port_transports_t) ports_and_transports;
+	size_t port_proto_entries;
 };
 
 struct dns_aclenv {
 	unsigned int   magic;
-	isc_mem_t *    mctx;
+	isc_mem_t     *mctx;
 	isc_refcount_t references;
-	dns_acl_t *    localhost;
-	dns_acl_t *    localnets;
-	bool	       match_mapped;
+
+	dns_acl_t *localhost;
+	dns_acl_t *localnets;
+
+	bool match_mapped;
 #if defined(HAVE_GEOIP2)
 	dns_geoip_databases_t *geoip;
 #endif /* HAVE_GEOIP2 */
@@ -107,7 +120,7 @@ struct dns_aclenv {
 
 ISC_LANG_BEGINDECLS
 
-isc_result_t
+void
 dns_acl_create(isc_mem_t *mctx, int n, dns_acl_t **target);
 /*%<
  * Create a new ACL, including an IP table and an array with room
@@ -151,28 +164,16 @@ dns_acl_merge(dns_acl_t *dest, dns_acl_t *source, bool pos);
  * an unexpected positive match in the parent ACL.
  */
 
-void
-dns_acl_attach(dns_acl_t *source, dns_acl_t **target);
-/*%<
- * Attach to acl 'source'.
- *
- * Requires:
- *\li	'source' to be a valid acl.
- *\li	'target' to be non NULL and '*target' to be NULL.
- */
-
-void
-dns_acl_detach(dns_acl_t **aclp);
-/*%<
- * Detach the acl. On final detach the acl must not be linked on any
- * list.
- *
- * Requires:
- *\li	'*aclp' to be a valid acl.
- *
- * Insists:
- *\li	'*aclp' is not linked on final detach.
- */
+#if DNS_ACL_TRACE
+#define dns_acl_ref(ptr)   dns_acl__ref(ptr, __func__, __FILE__, __LINE__)
+#define dns_acl_unref(ptr) dns_acl__unref(ptr, __func__, __FILE__, __LINE__)
+#define dns_acl_attach(ptr, ptrp) \
+	dns_acl__attach(ptr, ptrp, __func__, __FILE__, __LINE__)
+#define dns_acl_detach(ptrp) dns_acl__detach(ptrp, __func__, __FILE__, __LINE__)
+ISC_REFCOUNT_TRACE_DECL(dns_acl);
+#else
+ISC_REFCOUNT_DECL(dns_acl);
+#endif
 
 bool
 dns_acl_isinsecure(const dns_acl_t *a);
@@ -193,7 +194,7 @@ dns_acl_allowed(isc_netaddr_t *addr, const dns_name_t *signer, dns_acl_t *acl,
  * permitted by 'acl' in environment 'aclenv'.
  */
 
-isc_result_t
+void
 dns_aclenv_create(isc_mem_t *mctx, dns_aclenv_t **envp);
 /*%<
  * Create ACL environment, setting up localhost and localnets ACLs
@@ -209,27 +210,27 @@ dns_aclenv_copy(dns_aclenv_t *t, dns_aclenv_t *s);
  */
 
 void
-dns_aclenv_attach(dns_aclenv_t *source, dns_aclenv_t **targetp);
+dns_aclenv_set(dns_aclenv_t *env, dns_acl_t *localhost, dns_acl_t *localnets);
 /*%<
- * Attach '*targetp' to ACL environment 'source'.
- *
- * Requires:
- *\li	'source' is a valid ACL environment.
- *\li	'targetp' is not NULL and '*targetp' is NULL.
+ * Attach the 'localhost' and 'localnets' arguments to 'env' ACL environment
  */
 
-void
-dns_aclenv_detach(dns_aclenv_t **aclenvp);
-/*%<
- * Detach an ACL environment; on final detach, destroy it.
- *
- * Requires:
- *\li	'*aclenvp' to be a valid ACL environment
- */
+#if DNS_ACL_TRACE
+#define dns_aclenv_ref(ptr) dns_aclenv__ref(ptr, __func__, __FILE__, __LINE__)
+#define dns_aclenv_unref(ptr) \
+	dns_aclenv__unref(ptr, __func__, __FILE__, __LINE__)
+#define dns_aclenv_attach(ptr, ptrp) \
+	dns_aclenv__attach(ptr, ptrp, __func__, __FILE__, __LINE__)
+#define dns_aclenv_detach(ptrp) \
+	dns_aclenv__detach(ptrp, __func__, __FILE__, __LINE__)
+ISC_REFCOUNT_TRACE_DECL(dns_aclenv);
+#else
+ISC_REFCOUNT_DECL(dns_aclenv);
+#endif
 
 isc_result_t
 dns_acl_match(const isc_netaddr_t *reqaddr, const dns_name_t *reqsigner,
-	      const dns_acl_t *acl, const dns_aclenv_t *env, int *match,
+	      const dns_acl_t *acl, dns_aclenv_t *env, int *match,
 	      const dns_aclelement_t **matchelt);
 /*%<
  * General, low-level ACL matching.  This is expected to
@@ -259,7 +260,7 @@ dns_acl_match(const isc_netaddr_t *reqaddr, const dns_name_t *reqsigner,
 
 bool
 dns_aclelement_match(const isc_netaddr_t *reqaddr, const dns_name_t *reqsigner,
-		     const dns_aclelement_t *e, const dns_aclenv_t *env,
+		     const dns_aclelement_t *e, dns_aclenv_t *env,
 		     const dns_aclelement_t **matchelt);
 /*%<
  * Like dns_acl_match, but matches against the single ACL element 'e'
@@ -271,6 +272,46 @@ dns_aclelement_match(const isc_netaddr_t *reqaddr, const dns_name_t *reqsigner,
  * returned through 'matchelt' is not necessarily 'e' itself.
  */
 
-ISC_LANG_ENDDECLS
+isc_result_t
+dns_acl_match_port_transport(const isc_netaddr_t      *reqaddr,
+			     const in_port_t	       local_port,
+			     const isc_nmsocket_type_t transport,
+			     const bool encrypted, const dns_name_t *reqsigner,
+			     const dns_acl_t *acl, dns_aclenv_t *env,
+			     int *match, const dns_aclelement_t **matchelt);
+/*%<
+ * Like dns_acl_match, but able to match the server port and
+ * transport, as well as encryption status.
+ *
+ * Requires:
+ *\li		'reqaddr' is not 'NULL';
+ *\li		'acl' is a valid ACL object.
+ */
 
-#endif /* DNS_ACL_H */
+void
+dns_acl_add_port_transports(dns_acl_t *acl, const in_port_t port,
+			    const uint32_t transports, const bool encrypted,
+			    const bool negative);
+/*%<
+ * Adds a "port-transports" entry to the specified ACL. Transports
+ * are specified as a bit-set 'transports' consisting of entries
+ * defined in the isc_nmsocket_type enumeration.
+ *
+ * Requires:
+ *\li		'acl' is a valid ACL object;
+ *\li		either 'port' or 'transports' is not equal to 0.
+ */
+
+void
+dns_acl_merge_ports_transports(dns_acl_t *dest, dns_acl_t *source, bool pos);
+/*%<
+ * Merges "port-transports" entries from the 'dest' ACL into
+ * the 'source' ACL. The 'pos' parameter works in a way similar to
+ * 'dns_acl_merge()'.
+ *
+ * Requires:
+ *\li		'dest' is a valid ACL object;
+ *\li		'source' is a valid ACL object.
+ */
+
+ISC_LANG_ENDDECLS

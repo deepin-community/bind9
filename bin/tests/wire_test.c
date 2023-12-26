@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -17,7 +19,6 @@
 #include <isc/commandline.h>
 #include <isc/file.h>
 #include <isc/mem.h>
-#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/string.h>
 #include <isc/util.h>
@@ -35,7 +36,7 @@ process_message(isc_buffer_t *source);
 static isc_result_t
 printmessage(dns_message_t *msg);
 
-static inline void
+static void
 CHECKRESULT(isc_result_t result, const char *msg) {
 	if (result != ISC_R_SUCCESS) {
 		printf("%s: %s\n", msg, isc_result_totext(result));
@@ -56,7 +57,6 @@ fromhex(char c) {
 
 	fprintf(stderr, "bad input format: %02x\n", c);
 	exit(3);
-	/* NOTREACHED */
 }
 
 static void
@@ -185,7 +185,7 @@ main(int argc, char *argv[]) {
 
 	if (rawdata) {
 		while (fread(&c, 1, 1, f) != 0) {
-			result = isc_buffer_reserve(&input, 1);
+			result = isc_buffer_reserve(input, 1);
 			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			isc_buffer_putuint8(input, (uint8_t)c);
 		}
@@ -201,7 +201,8 @@ main(int argc, char *argv[]) {
 					break;
 				}
 				if (*rp != ' ' && *rp != '\t' && *rp != '\r' &&
-				    *rp != '\n') {
+				    *rp != '\n')
+				{
 					*wp++ = *rp;
 					len++;
 				}
@@ -221,7 +222,7 @@ main(int argc, char *argv[]) {
 				c = fromhex(*rp++);
 				c *= 16;
 				c += fromhex(*rp++);
-				result = isc_buffer_reserve(&input, 1);
+				result = isc_buffer_reserve(input, 1);
 				RUNTIME_CHECK(result == ISC_R_SUCCESS);
 				isc_buffer_putuint8(input, (uint8_t)c);
 			}
@@ -269,7 +270,7 @@ process_message(isc_buffer_t *source) {
 	int i;
 
 	message = NULL;
-	dns_message_create(mctx, DNS_MESSAGE_INTENTPARSE, &message);
+	dns_message_create(mctx, NULL, NULL, DNS_MESSAGE_INTENTPARSE, &message);
 
 	result = dns_message_parse(message, source, parseflags);
 	if (result == DNS_R_RECOVERABLE) {
@@ -285,7 +286,7 @@ process_message(isc_buffer_t *source) {
 	}
 
 	if (dorender) {
-		unsigned char b2[64 * 1024];
+		unsigned char b2[65535];
 		isc_buffer_t buffer;
 		dns_compress_t cctx;
 
@@ -302,8 +303,7 @@ process_message(isc_buffer_t *source) {
 			message->counts[i] = 0; /* Another hack XXX */
 		}
 
-		result = dns_compress_init(&cctx, -1, mctx);
-		CHECKRESULT(result, "dns_compress_init() failed");
+		dns_compress_init(&cctx, mctx, 0);
 
 		result = dns_message_renderbegin(message, &cctx, &buffer);
 		CHECKRESULT(result, "dns_message_renderbegin() failed");
@@ -339,7 +339,8 @@ process_message(isc_buffer_t *source) {
 			isc_mem_stats(mctx, stdout);
 		}
 
-		dns_message_create(mctx, DNS_MESSAGE_INTENTPARSE, &message);
+		dns_message_create(mctx, NULL, NULL, DNS_MESSAGE_INTENTPARSE,
+				   &message);
 
 		result = dns_message_parse(message, &buffer, parseflags);
 		CHECKRESULT(result, "dns_message_parse failed");

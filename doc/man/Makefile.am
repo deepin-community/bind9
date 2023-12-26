@@ -38,6 +38,8 @@ MANPAGES_RST =				\
 	tsig-keygen.rst			\
 	../../bin/check/named-checkconf.rst \
 	../../bin/check/named-checkzone.rst \
+	../../bin/check/named-compilezone.rst \
+	../../bin/confgen/ddns-confgen.rst \
 	../../bin/confgen/rndc-confgen.rst \
 	../../bin/confgen/tsig-keygen.rst \
 	../../bin/delv/delv.rst \
@@ -53,6 +55,7 @@ MANPAGES_RST =				\
 	../../bin/dnssec/dnssec-settime.rst \
 	../../bin/dnssec/dnssec-signzone.rst \
 	../../bin/dnssec/dnssec-verify.rst \
+	../../bin/named/named.conf.rst \
 	../../bin/named/named.rst \
 	../../bin/nsupdate/nsupdate.rst \
 	../../bin/plugins/filter-aaaa.rst \
@@ -66,7 +69,6 @@ MANPAGES_RST =				\
 	../../bin/tools/named-nzd2nzf.rst \
 	../../bin/tools/named-rrchecker.rst \
 	../../bin/tools/nsec3hash.rst
-
 
 man_MANS =				\
 	arpaname.1			\
@@ -102,7 +104,7 @@ man_MANS =				\
 	tsig-keygen.8
 
 if HAVE_DNSTAP
-man_MANS += 				\
+man_MANS +=				\
 	dnstap-read.1
 endif HAVE_DNSTAP
 
@@ -121,7 +123,7 @@ EXTRA_DIST =				\
 	$(MANPAGES_RST)			\
 	$(MANPAGES_IN)
 
-CLEANFILES =				\
+CLEANFILES +=				\
 	$(man_MANS)
 
 #
@@ -132,6 +134,9 @@ man_SUBST =							\
 	$(AM_V_SED)$(SED)					\
 	  -e 's,[@]PACKAGE_VERSION@,$(PACKAGE_VERSION),'	\
 	  -e 's,[@]RELEASE_DATE@,$(RELEASE_DATE),'		\
+	  -e 's,[@]libdir[@],$(libdir),g'			\
+	  -e 's,[@]runstatedir[@],$(runstatedir),g'		\
+	  -e 's,[@]sysconfdir[@],$(sysconfdir),g'		\
 	  $(srcdir)/$@in >$@
 
 .1in.1:
@@ -151,13 +156,16 @@ doc-local: man
 clean-local::
 	-rm -rf $(SPHINXBUILDDIR)
 
-if MAINTAINER_MODE
 
 CLEANFILES +=				\
 	manpages.stamp
 
+if MAINTAINER_MODE
+
 MAINTAINERCLEANFILES =			\
 	$(MANPAGES_IN)
+
+endif MAINTAINER_MODE
 
 #
 # Build rules for generating pre-generated manpages
@@ -170,6 +178,7 @@ if HAVE_SPHINX_BUILD
 manpages.stamp: $(MANPAGES_RST)
 	@rm -f manpages.tmp
 	@touch manpages.tmp
+	echo "${man_RST_EPILOG}"
 	$(AM_V_SPHINX)$(SPHINX_BUILD) -b man -d $(SPHINXBUILDDIR)/.doctrees/man $(man_SPHINXOPTS) $(SPHINXBUILDDIR)/man
 	for f in $(SPHINXBUILDDIR)/man/*; do \
 	  cp -a "$$f" "$(srcdir)/$$(basename $$f)in"; \
@@ -201,6 +210,5 @@ $(MANPAGES_IN): manpages.stamp
             $$dry test -f manpages.stamp; exit $$?; \
           fi; \
         fi
-endif HAVE_SPHINX_BUILD
 
-endif MAINTAINER_MODE
+endif HAVE_SPHINX_BUILD

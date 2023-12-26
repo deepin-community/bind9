@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -17,13 +19,11 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include <isc/app.h>
 #include <isc/attributes.h>
 #include <isc/commandline.h>
+#include <isc/loop.h>
 #include <isc/netaddr.h>
-#include <isc/print.h>
 #include <isc/string.h>
-#include <isc/task.h>
 #include <isc/util.h>
 
 #include <dns/byaddr.h>
@@ -99,7 +99,7 @@ rcode_totext(dns_rcode_t rcode) {
 	return (totext.deconsttext);
 }
 
-ISC_NORETURN static void
+noreturn static void
 show_usage(void);
 
 static void
@@ -137,7 +137,7 @@ show_usage(void) {
 
 static void
 host_shutdown(void) {
-	(void)isc_app_shutdown();
+	isc_loopmgr_shutdown(loopmgr);
 }
 
 static void
@@ -149,9 +149,9 @@ received(unsigned int bytes, isc_sockaddr_t *from, dig_query_t *query) {
 		char fromtext[ISC_SOCKADDR_FORMATSIZE];
 		isc_sockaddr_format(from, fromtext, sizeof(fromtext));
 		if (query->lookup->use_usec) {
-			TIME_NOW_HIRES(&now);
+			now = isc_time_now_hires();
 		} else {
-			TIME_NOW(&now);
+			now = isc_time_now();
 		}
 		diff = (int)isc_time_microdiff(&now, &query->time_sent);
 		printf("Received %u bytes from %s in %d ms\n", bytes, fromtext,
@@ -209,15 +209,9 @@ printsection(dns_message_t *msg, dns_section_t sectionid,
 	isc_result_t result, loopresult;
 	isc_region_t r;
 	dns_name_t empty_name;
-	char tbuf[4096];
+	char tbuf[4096] = { 0 };
 	bool first;
-	bool no_rdata;
-
-	if (sectionid == DNS_SECTION_QUESTION) {
-		no_rdata = true;
-	} else {
-		no_rdata = false;
-	}
+	bool no_rdata = (sectionid == DNS_SECTION_QUESTION);
 
 	if (headers) {
 		printf(";; %s SECTION:\n", section_name);
@@ -537,7 +531,8 @@ printmessage(dig_query_t *query, const isc_buffer_t *msgbuf, dns_message_t *msg,
 	}
 
 	if (!ISC_LIST_EMPTY(msg->sections[DNS_SECTION_AUTHORITY]) &&
-	    !short_form) {
+	    !short_form)
+	{
 		printf("\n");
 		result = printsection(msg, DNS_SECTION_AUTHORITY, "AUTHORITY",
 				      true, query);
@@ -546,7 +541,8 @@ printmessage(dig_query_t *query, const isc_buffer_t *msgbuf, dns_message_t *msg,
 		}
 	}
 	if (!ISC_LIST_EMPTY(msg->sections[DNS_SECTION_ADDITIONAL]) &&
-	    !short_form) {
+	    !short_form)
+	{
 		printf("\n");
 		result = printsection(msg, DNS_SECTION_ADDITIONAL, "ADDITIONAL",
 				      true, query);
@@ -582,12 +578,6 @@ printmessage(dig_query_t *query, const isc_buffer_t *msgbuf, dns_message_t *msg,
 
 static const char *optstring = "46aAc:dilnm:p:rst:vVwCDN:R:TUW:";
 
-/*% version */
-static void
-version(void) {
-	fprintf(stderr, "host %s\n", PACKAGE_VERSION);
-}
-
 static void
 pre_parse_args(int argc, char **argv) {
 	int c;
@@ -600,10 +590,12 @@ pre_parse_args(int argc, char **argv) {
 			{
 				isc_mem_debugging |= ISC_MEM_DEBUGTRACE;
 			} else if (strcasecmp("record",
-					      isc_commandline_argument) == 0) {
+					      isc_commandline_argument) == 0)
+			{
 				isc_mem_debugging |= ISC_MEM_DEBUGRECORD;
 			} else if (strcasecmp("usage",
-					      isc_commandline_argument) == 0) {
+					      isc_commandline_argument) == 0)
+			{
 				isc_mem_debugging |= ISC_MEM_DEBUGUSAGE;
 			}
 			break;
@@ -661,7 +653,7 @@ pre_parse_args(int argc, char **argv) {
 		case 'v':
 			break;
 		case 'V':
-			version();
+			printf("host %s\n", PACKAGE_VERSION);
 			exit(0);
 			break;
 		case 'w':
@@ -714,7 +706,8 @@ parse_args(bool is_batchfile, int argc, char **argv) {
 			break;
 		case 't':
 			if (strncasecmp(isc_commandline_argument, "ixfr=", 5) ==
-			    0) {
+			    0)
+			{
 				rdtype = dns_rdatatype_ixfr;
 				/* XXXMPA add error checking */
 				serial = strtoul(isc_commandline_argument + 5,
@@ -733,7 +726,8 @@ parse_args(bool is_batchfile, int argc, char **argv) {
 				      isc_commandline_argument);
 			}
 			if (!lookup->rdtypeset ||
-			    lookup->rdtype != dns_rdatatype_axfr) {
+			    lookup->rdtype != dns_rdatatype_axfr)
+			{
 				lookup->rdtype = rdtype;
 			}
 			lookup->rdtypeset = true;
@@ -774,10 +768,11 @@ parse_args(bool is_batchfile, int argc, char **argv) {
 			break;
 		case 'A':
 			list_almost_all = true;
-		/* FALL THROUGH */
+			FALLTHROUGH;
 		case 'a':
 			if (!lookup->rdtypeset ||
-			    lookup->rdtype != dns_rdatatype_axfr) {
+			    lookup->rdtype != dns_rdatatype_axfr)
+			{
 				lookup->rdtype = dns_rdatatype_any;
 			}
 			list_type = dns_rdatatype_any;
@@ -851,6 +846,7 @@ parse_args(bool is_batchfile, int argc, char **argv) {
 			break;
 		case 'p':
 			port = atoi(isc_commandline_argument);
+			port_set = true;
 			break;
 		}
 	}
@@ -888,8 +884,6 @@ parse_args(bool is_batchfile, int argc, char **argv) {
 
 int
 main(int argc, char **argv) {
-	isc_result_t result;
-
 	tries = 2;
 
 	ISC_LIST_INIT(lookup_list);
@@ -907,8 +901,6 @@ main(int argc, char **argv) {
 	debug("main()");
 	progname = argv[0];
 	pre_parse_args(argc, argv);
-	result = isc_app_start();
-	check_result(result, "isc_app_start");
 	setup_libs();
 	setup_system(ipv4only, ipv6only);
 	parse_args(false, argc, argv);
@@ -917,11 +909,12 @@ main(int argc, char **argv) {
 	} else if (keysecret[0] != 0) {
 		setup_text_key();
 	}
-	result = isc_app_onrun(mctx, global_task, onrun_callback, NULL);
-	check_result(result, "isc_app_onrun");
-	isc_app_run();
+
+	isc_loopmgr_setup(loopmgr, run_loop, NULL);
+	isc_loopmgr_run(loopmgr);
+
 	cancel_all();
 	destroy_libs();
-	isc_app_finish();
+
 	return ((seen_error == 0) ? 0 : 1);
 }

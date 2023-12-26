@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -331,7 +333,7 @@ plugin_register(const char *parameters, const void *cfg, const char *cfg_file,
 		unsigned long cfg_line, isc_mem_t *mctx, isc_log_t *lctx,
 		void *actx, ns_hooktable_t *hooktable, void **instp) {
 	filter_instance_t *inst = NULL;
-	isc_result_t result;
+	isc_result_t result = ISC_R_SUCCESS;
 
 	isc_log_write(lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_HOOKS,
 		      ISC_LOG_INFO,
@@ -340,7 +342,8 @@ plugin_register(const char *parameters, const void *cfg, const char *cfg_file,
 		      cfg_file, cfg_line, parameters != NULL ? "with" : "no");
 
 	inst = isc_mem_get(mctx, sizeof(*inst));
-	memset(inst, 0, sizeof(*inst));
+	*inst = (filter_instance_t){ 0 };
+
 	isc_mem_attach(mctx, &inst->mctx);
 
 	if (parameters != NULL) {
@@ -348,7 +351,7 @@ plugin_register(const char *parameters, const void *cfg, const char *cfg_file,
 				       cfg_line, mctx, lctx, actx));
 	}
 
-	CHECK(isc_ht_init(&inst->ht, mctx, 16));
+	isc_ht_init(&inst->ht, mctx, 1, ISC_HT_CASE_SENSITIVE);
 	isc_mutex_init(&inst->hlock);
 
 	/*
@@ -359,7 +362,7 @@ plugin_register(const char *parameters, const void *cfg, const char *cfg_file,
 	*instp = inst;
 
 cleanup:
-	if (result != ISC_R_SUCCESS && inst != NULL) {
+	if (result != ISC_R_SUCCESS) {
 		plugin_destroy((void **)&inst);
 	}
 
@@ -620,7 +623,8 @@ process_section(const section_filter_t *filter) {
 		}
 
 		if (section == DNS_SECTION_ANSWER ||
-		    section == DNS_SECTION_AUTHORITY) {
+		    section == DNS_SECTION_AUTHORITY)
+		{
 			message->flags &= ~DNS_MESSAGEFLAG_AD;
 		}
 	}

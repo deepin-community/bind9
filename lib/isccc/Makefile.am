@@ -8,7 +8,6 @@ libisccc_la_HEADERS =			\
 	include/isccc/base64.h		\
 	include/isccc/cc.h		\
 	include/isccc/ccmsg.h		\
-	include/isccc/events.h		\
 	include/isccc/sexpr.h		\
 	include/isccc/symtab.h		\
 	include/isccc/symtype.h		\
@@ -27,6 +26,7 @@ libisccc_la_SOURCES =		\
 libisccc_la_CPPFLAGS =		\
 	$(AM_CPPFLAGS)		\
 	$(LIBISC_CFLAGS)	\
+	$(LIBDNS_CFLAGS)	\
 	$(LIBISCCC_CFLAGS)
 
 libisccc_la_LIBADD =	\

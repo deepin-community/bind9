@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef ISCCFG_LOG_H
-#define ISCCFG_LOG_H 1
+#pragma once
 
 /*! \file isccfg/log.h */
 
@@ -43,5 +44,3 @@ cfg_log_init(isc_log_t *lctx);
  */
 
 ISC_LANG_ENDDECLS
-
-#endif /* ISCCFG_LOG_H */

@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -89,7 +91,10 @@ static const char *description[ISC_R_NRESULTS] = {
 	[ISC_R_DEFAULT] = "default",
 	[ISC_R_IPV4PREFIX] = "IPv4 prefix",
 	[ISC_R_TLSERROR] = "TLS error",
+	[ISC_R_TLSBADPEERCERT] = "TLS peer certificate verification failed",
 	[ISC_R_HTTP2ALPNERROR] = "ALPN for HTTP/2 failed",
+	[ISC_R_DOTALPNERROR] = "ALPN for DoT failed",
+	[ISC_R_INVALIDPROTO] = "invalid protocol",
 
 	[DNS_R_LABELTOOLONG] = "label too long",
 	[DNS_R_BADESCAPE] = "bad escape",
@@ -194,7 +199,7 @@ static const char *description[ISC_R_NRESULTS] = {
 	[DNS_R_MXISADDRESS] = "MX is an address",
 	[DNS_R_DUPLICATE] = "duplicate query",
 	[DNS_R_INVALIDNSEC3] = "invalid NSEC3 owner name (wildcard)",
-	[DNS_R_NOTMASTER] = "not master",
+	[DNS_R_NOTPRIMARY] = "not primary",
 	[DNS_R_BROKENCHAIN] = "broken trust chain",
 	[DNS_R_EXPIRED] = "expired",
 	[DNS_R_NOTDYNAMIC] = "not dynamic",
@@ -217,6 +222,9 @@ static const char *description[ISC_R_NRESULTS] = {
 	[DNS_R_NSEC3BADALG] = "cannot use NSEC3 with key algorithm",
 	[DNS_R_NSEC3RESALT] = "NSEC3 resalt",
 	[DNS_R_INCONSISTENTRR] = "inconsistent resource record",
+	[DNS_R_HAVEPARMKEYS] = "unexpected service parameter keys",
+	[DNS_R_NOALPN] = "no ALPN",
+	[DNS_R_NODOHPATH] = "no DOHPATH",
 
 	[DST_R_UNSUPPORTEDALG] = "algorithm is unsupported",
 	[DST_R_CRYPTOFAILURE] = "crypto failure",
@@ -254,6 +262,7 @@ static const char *description[ISC_R_NRESULTS] = {
 	[DNS_R_RCODE14] = "<rcode 14>",
 	[DNS_R_RCODE15] = "<rcode 15>",
 	[DNS_R_BADVERS] = "BADVERS",
+	[DNS_R_BADCOOKIE] = "BADCOOKIE",
 
 	[ISCCC_R_UNKNOWNVERSION] = "unknown version",
 	[ISCCC_R_SYNTAX] = "syntax error",
@@ -261,6 +270,7 @@ static const char *description[ISC_R_NRESULTS] = {
 	[ISCCC_R_EXPIRED] = "expired",
 	[ISCCC_R_CLOCKSKEW] = "clock skew",
 	[ISCCC_R_DUPLICATE] = "duplicate",
+	[ISCCC_R_MAXDEPTH] = "max depth",
 };
 
 static const char *identifier[ISC_R_NRESULTS] = {
@@ -335,7 +345,9 @@ static const char *identifier[ISC_R_NRESULTS] = {
 	[ISC_R_DEFAULT] = "ISC_R_DEFAULT",
 	[ISC_R_IPV4PREFIX] = "ISC_R_IPV4PREFIX",
 	[ISC_R_TLSERROR] = "ISC_R_TLSERROR",
+	[ISC_R_TLSBADPEERCERT] = "ISC_R_TLSBADPEERCERT",
 	[ISC_R_HTTP2ALPNERROR] = "ISC_R_HTTP2ALPNERROR",
+	[ISC_R_DOTALPNERROR] = "ISC_R_DOTALPNERROR",
 	[DNS_R_LABELTOOLONG] = "DNS_R_LABELTOOLONG",
 	[DNS_R_BADESCAPE] = "DNS_R_BADESCAPE",
 	[DNS_R_EMPTYLABEL] = "DNS_R_EMPTYLABEL",
@@ -439,7 +451,7 @@ static const char *identifier[ISC_R_NRESULTS] = {
 	[DNS_R_MXISADDRESS] = "DNS_R_MXISADDRESS",
 	[DNS_R_DUPLICATE] = "DNS_R_DUPLICATE",
 	[DNS_R_INVALIDNSEC3] = "DNS_R_INVALIDNSEC3",
-	[DNS_R_NOTMASTER] = "DNS_R_NOTMASTER",
+	[DNS_R_NOTPRIMARY] = "DNS_R_NOTPRIMARY",
 	[DNS_R_BROKENCHAIN] = "DNS_R_BROKENCHAIN",
 	[DNS_R_EXPIRED] = "DNS_R_EXPIRED",
 	[DNS_R_NOTDYNAMIC] = "DNS_R_NOTDYNAMIC",
@@ -462,6 +474,9 @@ static const char *identifier[ISC_R_NRESULTS] = {
 	[DNS_R_NSEC3BADALG] = "DNS_R_NSEC3BADALG",
 	[DNS_R_NSEC3RESALT] = "DNS_R_NSEC3RESALT",
 	[DNS_R_INCONSISTENTRR] = "DNS_R_INCONSISTENTRR",
+	[DNS_R_HAVEPARMKEYS] = "DNS_R_HAVEPARMKEYS",
+	[DNS_R_NOALPN] = "DNS_R_NOALPN",
+	[DNS_R_NODOHPATH] = "DNS_R_NODOHPATH",
 
 	[DST_R_UNSUPPORTEDALG] = "DST_R_UNSUPPORTEDALG",
 	[DST_R_CRYPTOFAILURE] = "DST_R_CRYPTOFAILURE",
@@ -499,6 +514,7 @@ static const char *identifier[ISC_R_NRESULTS] = {
 	[DNS_R_RCODE14] = "DNS_R_RCODE14",
 	[DNS_R_RCODE15] = "DNS_R_RCODE15",
 	[DNS_R_BADVERS] = "DNS_R_BADVERS",
+	[DNS_R_BADCOOKIE] = "DNS_R_BADCOOKIE",
 
 	[ISCCC_R_UNKNOWNVERSION] = "ISCCC_R_UNKNOWNVERSION",
 	[ISCCC_R_SYNTAX] = "ISCCC_R_SYNTAX",
@@ -506,6 +522,7 @@ static const char *identifier[ISC_R_NRESULTS] = {
 	[ISCCC_R_EXPIRED] = "ISCCC_R_EXPIRED",
 	[ISCCC_R_CLOCKSKEW] = "ISCCC_R_CLOCKSKEW",
 	[ISCCC_R_DUPLICATE] = "ISCCC_R_DUPLICATE",
+	[ISCCC_R_MAXDEPTH] = "ISCCC_R_MAXDEPTH",
 };
 
 STATIC_ASSERT((DNS_R_SERVFAIL - DNS_R_NOERROR == 2),

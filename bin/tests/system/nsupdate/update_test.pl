@@ -1,9 +1,11 @@
 #!/usr/bin/perl
-#
+
 # Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
+# SPDX-License-Identifier: MPL-2.0
+#
 # This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
+# License, v. 2.0.  If a copy of the MPL was not distributed with this
 # file, you can obtain one at https://mozilla.org/MPL/2.0/.
 #
 # See the COPYRIGHT file distributed with this work for additional
@@ -415,8 +417,8 @@ if ($Net::DNS::VERSION < 1.01) {
     print "skipped Excessive NSEC3PARAM iterations; Net::DNS too old.\n";
 } else {
     section("Excessive NSEC3PARAM iterations");
-    test("REFUSED", ["update", rr_add("$zone 300 NSEC3PARAM 1 0 151 -")]);
-    test("NOERROR", ["update", rr_add("$zone 300 NSEC3PARAM 1 0 150 -")]);
+    test("REFUSED", ["update", rr_add("$zone 300 NSEC3PARAM 1 0 51 -")]);
+    test("NOERROR", ["update", rr_add("$zone 300 NSEC3PARAM 1 0 50 -")]);
 }
 
 if ($failures) {

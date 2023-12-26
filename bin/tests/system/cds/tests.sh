@@ -1,63 +1,70 @@
 #!/bin/sh -e
-#
+
 # Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
+# SPDX-License-Identifier: MPL-2.0
+#
 # This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
+# License, v. 2.0.  If a copy of the MPL was not distributed with this
 # file, you can obtain one at https://mozilla.org/MPL/2.0/.
 #
 # See the COPYRIGHT file distributed with this work for additional
 # information regarding copyright ownership.
+
+set -e
 
 . ../conf.sh
 
 status=0
 n=0
 fail() {
-	echo_i "failed"
-	status=`expr $status + 1`
+  echo_i "failed"
+  status=$((status + 1))
 }
 
 runcmd() {
-        "$@" 1> out.$n 2> err.$n
-	echo $?
+  (
+    "$@" 1>out.$n 2>err.$n
+    echo $?
+  ) || true
 }
 
 testcase() {
-	n=`expr $n + 1`
-	echo_i "$name ($n)"
-	expect=$1
-	shift
-	result=`runcmd "$@"`
-	check_stdout
-	check_stderr
-	if [ "$expect" -ne "$result" ]; then
-                echo_d "exit status does not match $expect"
-		fail
-	fi
-        unset name err out
+  n=$((n + 1))
+  echo_i "$name ($n)"
+  expect=$1
+  shift
+  result=$(runcmd "$@")
+  check_stdout
+  check_stderr
+  if [ "$expect" -ne "$result" ]; then
+    echo_d "exit status does not match $expect"
+    fail
+  fi
+  unset name err out
 }
 
 check_stderr() {
-	if [ -n "${err:=}" ]; then
-		egrep "$err" err.$n >/dev/null && return 0
-	else
-		[ -s err.$n ] || return 0
-	fi
-	echo_d "stderr did not match '$err'"
-	cat err.$n | cat_d
-	fail
+  if [ -n "${err:=}" ]; then
+    grep -E "$err" err.$n >/dev/null && return 0
+    echo_d "stderr did not match '$err'"
+  else
+    [ -s err.$n ] || return 0
+  fi
+  cat err.$n | cat_d
+  fail
 }
 
 check_stdout() {
-	$DIFF out.$n "${out:-empty}" >/dev/null && return
-	echo_d "stdout did not match '$out'"
-	(	echo "wanted"
-		cat "$out"
-		echo "got"
-		cat out.$n
-	) | cat_d
-	fail
+  diff out.$n "${out:-empty}" >/dev/null && return
+  echo_d "stdout did not match '$out'"
+  (
+    echo "wanted"
+    cat "$out"
+    echo "got"
+    cat out.$n
+  ) | cat_d
+  fail
 }
 
 Z=cds.test
@@ -126,10 +133,10 @@ name='in-place backup correct modification time'
 testcase 0 $PERL checkmtime.pl 7200 DS.inplace.bak
 
 name='in-place correct output'
-testcase 0 $DIFF DS.1 DS.inplace
+testcase 0 diff DS.1 DS.inplace
 
 name='in-place backup unmodified'
-testcase 0 $DIFF DS.1 DS.inplace.bak
+testcase 0 diff DS.1 DS.inplace.bak
 
 name='one mangled DS'
 err='found RRSIG by key'

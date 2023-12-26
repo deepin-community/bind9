@@ -1,9 +1,11 @@
 #!/usr/bin/perl -w
-#
+
 # Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
+# SPDX-License-Identifier: MPL-2.0
+#
 # This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
+# License, v. 2.0.  If a copy of the MPL was not distributed with this
 # file, you can obtain one at https://mozilla.org/MPL/2.0/.
 #
 # See the COPYRIGHT file distributed with this work for additional
@@ -125,9 +127,10 @@ if ($server_arg) {
 # Start the servers we found.
 
 foreach my $name(@ns) {
+	my $instances_so_far = count_running_lines($name);
 	&check_ns_port($name);
 	&start_ns_server($name, $options_arg);
-	&verify_ns_server($name);
+	&verify_ns_server($name, $instances_so_far);
 }
 
 foreach my $name(@ans) {
@@ -202,12 +205,12 @@ sub start_server {
 	my $child = `$command`;
 	chomp($child);
 
-	# wait up to 25 seconds for the server to start and to write the
+	# wait up to 90 seconds for the server to start and to write the
 	# pid file otherwise kill this server and any others that have
 	# already been started
 	my $tries = 0;
 	while (!-s $pid_file) {
-		if (++$tries > 250) {
+		if (++$tries > 900) {
 			print "I:$test:Couldn't start server $command (pid=$child)\n";
 			print "I:$test:failed\n";
 			kill "ABRT", $child if ("$child" ne "");
@@ -227,22 +230,13 @@ sub construct_ns_command {
 
 	my $command;
 
-	if ($ENV{'USE_VALGRIND'}) {
-		$command = "valgrind -q --gen-suppressions=all --num-callers=48 --fullpath-after= --log-file=named-$server-valgrind-%p.log ";
-
-		if ($ENV{'USE_VALGRIND'} eq 'helgrind') {
-			$command .= "--tool=helgrind ";
-		} else {
-			$command .= "--tool=memcheck --track-origins=yes --leak-check=full ";
-		}
-
-		$command .= "$NAMED -m none ";
+	if ($taskset) {
+		$command = "taskset $taskset $NAMED ";
+	} elsif ($ENV{'USE_RR'}) {
+		$ENV{'_RR_TRACE_DIR'} = ".";
+		$command = "rr record --chaos $NAMED ";
 	} else {
-		if ($taskset) {
-			$command = "taskset $taskset $NAMED ";
-		} else {
-			$command = "$NAMED ";
-		}
+		$command = "$NAMED ";
 	}
 
 	my $args_file = $testdir . "/" . $server . "/" . "named.args";
@@ -266,7 +260,6 @@ sub construct_ns_command {
 		}
 	} else {
 		$command .= "-D $test-$server ";
-		$command .= "-X named.lock ";
 		$command .= "-m record ";
 
 		foreach my $t_option(
@@ -278,7 +271,7 @@ sub construct_ns_command {
 			}
 		}
 
-		$command .= "-c named.conf -d 99 -g -U 4 -T maxcachesize=2097152";
+		$command .= "-c named.conf -d 99 -g -T maxcachesize=2097152";
 	}
 
 	if (-e "$testdir/$server/named.notcp") {
@@ -371,24 +364,28 @@ sub start_ans_server {
 	start_server($server, $command, $pid_file);
 }
 
-sub verify_ns_server {
+sub count_running_lines {
 	my ( $server ) = @_;
-
-	my $tries = 0;
 
 	my $runfile = "$testdir/$server/named.run";
 
-	while (1) {
-		# the shell *ought* to have created the file immediately, but this
-		# logic allows the creation to be delayed without issues
-		if (open(my $fh, "<", $runfile)) {
-			# the two non-whitespace blobs should be the date and time
-			# but we don't care about them really, only that they are there
-			if (grep /^\S+ \S+ running\R/, <$fh>) {
-				last;
-			}
-		}
+	# the shell *ought* to have created the file immediately, but this
+	# logic allows the creation to be delayed without issues
+	if (open(my $fh, "<", $runfile)) {
+		# the two non-whitespace blobs should be the date and time
+		# but we don't care about them really, only that they are there
+		return scalar(grep /^\S+ \S+ running\R/, <$fh>);
+	} else {
+		return 0;
+	}
+}
 
+sub verify_ns_server {
+	my ( $server, $instances_so_far ) = @_;
+
+	my $tries = 0;
+
+	while (count_running_lines($server) < $instances_so_far + 1) {
 		$tries++;
 
 		if ($tries >= 30) {
@@ -419,8 +416,13 @@ sub verify_ns_server {
 		$tcp = "";
 	}
 
+	my $ip = "10.53.0.$n";
+	if (-e "$testdir/$server/named.ipv6-only") {
+		$ip = "fd92:7065:b8e:ffff::$n";
+	}
+
 	while (1) {
-		my $return = system("$DIG $tcp +noadd +nosea +nostat +noquest +nocomm +nocmd +noedns -p $port version.bind. chaos txt \@10.53.0.$n > /dev/null");
+		my $return = system("$DIG $tcp +noadd +nosea +nostat +noquest +nocomm +nocmd +noedns -p $port version.bind. chaos txt \@$ip > /dev/null");
 
 		last if ($return == 0);
 

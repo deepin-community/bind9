@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -17,7 +19,6 @@
 #include <isc/commandline.h>
 #include <isc/lex.h>
 #include <isc/mem.h>
-#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/string.h>
 #include <isc/util.h>
@@ -33,7 +34,7 @@ static isc_lex_t *lex;
 
 static isc_lexspecials_t specials;
 
-ISC_NORETURN static void
+noreturn static void
 usage(void);
 
 static void
@@ -50,7 +51,18 @@ usage(void) {
 	exit(0);
 }
 
-ISC_NORETURN static void
+static void
+cleanup(void) {
+	if (lex != NULL) {
+		isc_lex_close(lex);
+		isc_lex_destroy(&lex);
+	}
+	if (mctx != NULL) {
+		isc_mem_destroy(&mctx);
+	}
+}
+
+noreturn static void
 fatal(const char *format, ...);
 
 static void
@@ -62,6 +74,7 @@ fatal(const char *format, ...) {
 	vfprintf(stderr, format, args);
 	va_end(args);
 	fputc('\n', stderr);
+	cleanup();
 	exit(1);
 }
 
@@ -155,7 +168,7 @@ main(int argc, char *argv[]) {
 	}
 
 	isc_mem_create(&mctx);
-	RUNTIME_CHECK(isc_lex_create(mctx, 256, &lex) == ISC_R_SUCCESS);
+	isc_lex_create(mctx, 256, &lex);
 
 	/*
 	 * Set up to lex DNS master file.
@@ -172,7 +185,8 @@ main(int argc, char *argv[]) {
 
 	if (origin != NULL) {
 		name = dns_fixedname_initname(&fixed);
-		result = dns_name_fromstring(name, origin, 0, NULL);
+		result = dns_name_fromstring(name, origin, dns_rootname, 0,
+					     NULL);
 		if (result != ISC_R_SUCCESS) {
 			fatal("dns_name_fromstring: %s",
 			      isc_result_totext(result));
@@ -327,8 +341,6 @@ main(int argc, char *argv[]) {
 		fflush(stdout);
 	}
 
-	isc_lex_close(lex);
-	isc_lex_destroy(&lex);
-	isc_mem_destroy(&mctx);
+	cleanup();
 	return (0);
 }

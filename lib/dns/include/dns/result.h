@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef DNS_RESULT_H
-#define DNS_RESULT_H 1
+#pragma once
 
 /*! \file dns/result.h */
 
@@ -28,5 +29,3 @@ isc_result_t
 dns_result_fromrcode(dns_rcode_t rcode);
 
 ISC_LANG_ENDDECLS
-
-#endif /* DNS_RESULT_H */

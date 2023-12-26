@@ -1,14 +1,245 @@
-bind9 (1:9.17.19.1-1+dde) UNRELEASED; urgency=medium
+bind9 (1:9.19.19-1) unstable; urgency=medium
 
-  * update
+  [ Ondřej Surý ]
+  * New upstream version 9.19.19
 
- -- Debian DNS Team <team+dns@tracker.debian.org>  Tue, 24 May 2022 17:06:21 +0800
+  [ Bernhard Schmidt ]
+  * Sync 9.18 to 9.19 (Closes: #1056984)
 
-bind9 (1:9.17.19.1-1+dde) unstable; urgency=medium
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 20 Dec 2023 17:01:32 +0100
 
-  * Disable Build-Dep xindy for sunway.
+bind9 (1:9.19.18-1) unstable; urgency=medium
 
- -- Miao Changwei <miaochangwei@uniontech.com>  Fri, 20 May 2022 15:45:43 +0800
+  * New upstream version 9.19.18
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 15 Nov 2023 17:51:18 +0100
+
+bind9 (1:9.19.17-1) unstable; urgency=medium
+
+  * New upstream version 9.19.17
+   - CVE-2023-3341: A stack exhaustion flaw in control channel code may
+     cause named to terminate unexpectedly (Closes: #1052416)
+   - CVE-2023-4236: named may terminate unexpectedly under high
+     DNS-over-TLS query load (Closes: #1052417)
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 20 Sep 2023 18:13:07 +0200
+
+bind9 (1:9.19.16-1) experimental; urgency=medium
+
+  * New upstream version 9.19.16
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 16 Aug 2023 17:54:24 +0200
+
+bind9 (1:9.19.15-1) experimental; urgency=medium
+
+  * New upstream version 9.19.15
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 19 Jul 2023 14:16:46 +0200
+
+bind9 (1:9.19.14-1) experimental; urgency=medium
+
+  * New upstream version 9.19.14
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 21 Jun 2023 21:00:01 +0200
+
+bind9 (1:9.19.13-1) experimental; urgency=medium
+
+  * New upstream version 9.19.13
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 17 May 2023 17:50:48 +0200
+
+bind9 (1:9.19.12-2) experimental; urgency=medium
+
+  * Add liburcu-dev to Build-Depends
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 20 Apr 2023 14:24:06 +0200
+
+bind9 (1:9.19.12-1) experimental; urgency=medium
+
+  * New upstream version 9.19.12
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 19 Apr 2023 15:01:59 +0200
+
+bind9 (1:9.19.11-1) experimental; urgency=medium
+
+  * New upstream version 9.19.11
+  * Update the d/bind9-dev.install, d/bind9.install and d/not-installed
+    after library squash
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 15 Mar 2023 18:27:20 +0100
+
+bind9 (1:9.19.10-1) experimental; urgency=medium
+
+  * New upstream version 9.19.10
+  * Drop libtool-bin from B-D (Closes: #1022968)
+
+ -- Ondřej Surý <ondrej@debian.org>  Fri, 10 Feb 2023 15:16:29 +0100
+
+bind9 (1:9.19.9-2) experimental; urgency=medium
+
+  * Allow the named to use systemd notify service
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 26 Jan 2023 21:18:35 +0100
+
+bind9 (1:9.19.9-1) experimental; urgency=medium
+
+  * New upstream version 9.19.9
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 25 Jan 2023 16:04:03 +0100
+
+bind9 (1:9.19.8-1) experimental; urgency=medium
+
+  * New upstream version 9.19.8
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 21 Dec 2022 18:02:17 +0100
+
+bind9 (1:9.19.7-1) experimental; urgency=medium
+
+  * New upstream version 9.19.7
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 16 Nov 2022 14:05:15 +0100
+
+bind9 (1:9.19.6-2) experimental; urgency=medium
+
+  * Use systemd notify for service readyness check (Closes: #994696)
+
+ -- Bernhard Schmidt <berni@debian.org>  Sun, 30 Oct 2022 00:14:05 +0200
+
+bind9 (1:9.19.6-1) experimental; urgency=medium
+
+  * New upstream version 9.19.6
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 19 Oct 2022 15:06:31 +0200
+
+bind9 (1:9.19.5-1) experimental; urgency=medium
+
+  * New upstream version 9.19.5
+   - CVE-2022-2795: Processing large delegations may severely degrade
+     resolver performance
+   - CVE-2022-2881: Buffer overread in statistics channel code
+   - CVE-2022-2906: Memory leaks in code handling Diffie-Hellman key
+     exchange via TKEY RRs (OpenSSL 3.0.0+ only)
+   - CVE-2022-3080: BIND 9 resolvers configured to answer from stale
+     cache with zero stale-answer-client-timeout may terminate unexpectedly
+   - CVE-2022-38177: Memory leak in ECDSA DNSSEC verification code
+   - CVE-2022-38178: Memory leaks in EdDSA DNSSEC verification code
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 21 Sep 2022 12:55:15 +0200
+
+bind9 (1:9.19.4-1) unstable; urgency=medium
+
+  * Remove doc/misc/options.active from the docs
+  * New upstream version 9.19.4
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 18 Aug 2022 09:48:41 +0200
+
+bind9 (1:9.19.3-1) unstable; urgency=medium
+
+  * New upstream version 9.19.3
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 20 Jul 2022 16:42:00 +0200
+
+bind9 (1:9.19.2-1) unstable; urgency=medium
+
+  * New upstream version 9.19.2
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 15 Jun 2022 14:43:54 +0200
+
+bind9 (1:9.19.1-1) unstable; urgency=medium
+
+  * Disable treat-warnings-as-errors in sphinx-build
+  * New upstream version 9.19.1
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 18 May 2022 17:26:23 +0200
+
+bind9 (1:9.19.0-1) unstable; urgency=medium
+
+  * Update d/ for BIND 9.19 Development
+  * New upstream version 9.19.0
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 21 Apr 2022 09:51:08 +0200
+
+bind9 (1:9.18.2-1) unstable; urgency=medium
+
+  * Drop libldap2-dev from Build-Depends (Closes: #1008021)
+  * New upstream version 9.18.2
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 21 Apr 2022 09:40:25 +0200
+
+bind9 (1:9.18.1-1) unstable; urgency=high
+
+  * New upstream version 9.18.1
+  * CVE-2021-25220: The rules for acceptance of records into the cache
+    have been tightened to prevent the possibility of poisoning if
+    forwarders send records outside the configured bailiwick.
+  * CVE-2022-0396: TCP connections with 'keep-response-order' enabled
+    could leave the TCP sockets in the 'CLOSE_WAIT' state when the client
+    did not properly shut down the connection.
+  * CVE-2022-0635: Lookups involving a DNAME could trigger an assertion
+    failure when 'synth-from-dnssec' was enabled (which is the default)
+  * CVE-2022-0667: When chasing DS records, a timed out or artificially
+    delayed fetch could cause 'named' to crash while resuming a DS lookup.
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 14 Mar 2022 15:29:31 +0100
+
+bind9 (1:9.18.0-2) unstable; urgency=medium
+
+  * Add patch to use detected L1 cache-line size instead of hard-coded
+    value, this should fix architectures with 128-byte L1 cache.
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 27 Jan 2022 13:16:04 +0100
+
+bind9 (1:9.18.0-1) unstable; urgency=medium
+
+  * Bump the upstream version in debian/ to 9.18
+  * New upstream version 9.18.0
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 26 Jan 2022 12:31:55 +0100
+
+bind9 (1:9.18.0~0+git28350c-1) unstable; urgency=medium
+
+  * New upstream version 9.18.0~0+git28350c
+   + Pull the 9.18.0 pre-release git to have the L1 cache line
+     fix (Closes: #1004271)
+  * Fix the typo when backing up and restoring configure{,.ac}
+    (Closes: #903586)
+  * Remove some prehistoring conffile no longer in use
+    (Closes: #942377)
+  * Pick UTC date for release_date variable (Closes: #1000893)
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 24 Jan 2022 16:00:49 +0100
+
+bind9 (1:9.17.22-1) unstable; urgency=medium
+
+  * New upstream version 9.17.22
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 19 Jan 2022 18:38:13 +0100
+
+bind9 (1:9.17.21-1) unstable; urgency=medium
+
+  * New upstream version 9.17.21
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 15 Dec 2021 15:22:46 +0100
+
+bind9 (1:9.17.20-3) unstable; urgency=medium
+
+  * Retain bind9-resolvconf.service alias (Closes: #1000565)
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 25 Nov 2021 10:10:50 +0100
+
+bind9 (1:9.17.20-2) unstable; urgency=medium
+
+  * Tighten the dependencies on bind9-libs for the utils too
+    (Closes: #1000354)
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 22 Nov 2021 08:58:22 +0100
+
+bind9 (1:9.17.20-1) unstable; urgency=medium
+
+  * New upstream version 9.17.20
+  * Remove the sphinx-patch, the role has been fixed upstream
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 18 Nov 2021 07:49:14 +0100
 
 bind9 (1:9.17.19-3) unstable; urgency=medium
 

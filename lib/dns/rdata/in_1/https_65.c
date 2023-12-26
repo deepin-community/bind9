@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -11,8 +13,7 @@
 
 /* draft-ietf-dnsop-svcb-https-02 */
 
-#ifndef RDATA_IN_1_HTTPS_65_C
-#define RDATA_IN_1_HTTPS_65_C
+#pragma once
 
 #define RRTYPE_HTTPS_ATTRIBUTES (DNS_RDATATYPEATTR_FOLLOWADDITIONAL)
 
@@ -21,7 +22,7 @@
  * since wire and presentation formats are identical.
  */
 
-static inline isc_result_t
+static isc_result_t
 fromtext_in_https(ARGS_FROMTEXT) {
 	REQUIRE(type == dns_rdatatype_https);
 	REQUIRE(rdclass == dns_rdataclass_in);
@@ -29,7 +30,7 @@ fromtext_in_https(ARGS_FROMTEXT) {
 	return (generic_fromtext_in_svcb(CALL_FROMTEXT));
 }
 
-static inline isc_result_t
+static isc_result_t
 totext_in_https(ARGS_TOTEXT) {
 	REQUIRE(rdata->type == dns_rdatatype_https);
 	REQUIRE(rdata->rdclass == dns_rdataclass_in);
@@ -38,7 +39,7 @@ totext_in_https(ARGS_TOTEXT) {
 	return (generic_totext_in_svcb(CALL_TOTEXT));
 }
 
-static inline isc_result_t
+static isc_result_t
 fromwire_in_https(ARGS_FROMWIRE) {
 	REQUIRE(type == dns_rdatatype_https);
 	REQUIRE(rdclass == dns_rdataclass_in);
@@ -46,7 +47,7 @@ fromwire_in_https(ARGS_FROMWIRE) {
 	return (generic_fromwire_in_svcb(CALL_FROMWIRE));
 }
 
-static inline isc_result_t
+static isc_result_t
 towire_in_https(ARGS_TOWIRE) {
 	REQUIRE(rdata->type == dns_rdatatype_https);
 	REQUIRE(rdata->length != 0);
@@ -54,7 +55,7 @@ towire_in_https(ARGS_TOWIRE) {
 	return (generic_towire_in_svcb(CALL_TOWIRE));
 }
 
-static inline int
+static int
 compare_in_https(ARGS_COMPARE) {
 	isc_region_t region1;
 	isc_region_t region2;
@@ -72,7 +73,7 @@ compare_in_https(ARGS_COMPARE) {
 	return (isc_region_compare(&region1, &region2));
 }
 
-static inline isc_result_t
+static isc_result_t
 fromstruct_in_https(ARGS_FROMSTRUCT) {
 	dns_rdata_in_https_t *https = source;
 
@@ -85,7 +86,7 @@ fromstruct_in_https(ARGS_FROMSTRUCT) {
 	return (generic_fromstruct_in_svcb(CALL_FROMSTRUCT));
 }
 
-static inline isc_result_t
+static isc_result_t
 tostruct_in_https(ARGS_TOSTRUCT) {
 	dns_rdata_in_https_t *https = target;
 
@@ -97,7 +98,7 @@ tostruct_in_https(ARGS_TOSTRUCT) {
 	return (generic_tostruct_in_svcb(CALL_TOSTRUCT));
 }
 
-static inline void
+static void
 freestruct_in_https(ARGS_FREESTRUCT) {
 	dns_rdata_in_https_t *https = source;
 
@@ -108,7 +109,7 @@ freestruct_in_https(ARGS_FREESTRUCT) {
 	generic_freestruct_in_svcb(CALL_FREESTRUCT);
 }
 
-static inline isc_result_t
+static isc_result_t
 additionaldata_in_https(ARGS_ADDLDATA) {
 	REQUIRE(rdata->type == dns_rdatatype_https);
 	REQUIRE(rdata->rdclass == dns_rdataclass_in);
@@ -116,7 +117,7 @@ additionaldata_in_https(ARGS_ADDLDATA) {
 	return (generic_additionaldata_in_svcb(CALL_ADDLDATA));
 }
 
-static inline isc_result_t
+static isc_result_t
 digest_in_https(ARGS_DIGEST) {
 	isc_region_t region1;
 
@@ -127,7 +128,7 @@ digest_in_https(ARGS_DIGEST) {
 	return ((digest)(arg, &region1));
 }
 
-static inline bool
+static bool
 checkowner_in_https(ARGS_CHECKOWNER) {
 	REQUIRE(type == dns_rdatatype_https);
 	REQUIRE(rdclass == dns_rdataclass_in);
@@ -140,7 +141,7 @@ checkowner_in_https(ARGS_CHECKOWNER) {
 	return (true);
 }
 
-static inline bool
+static bool
 checknames_in_https(ARGS_CHECKNAMES) {
 	REQUIRE(rdata->type == dns_rdatatype_https);
 	REQUIRE(rdata->rdclass == dns_rdataclass_in);
@@ -148,7 +149,7 @@ checknames_in_https(ARGS_CHECKNAMES) {
 	return (generic_checknames_in_svcb(CALL_CHECKNAMES));
 }
 
-static inline int
+static int
 casecompare_in_https(ARGS_COMPARE) {
 	return (compare_in_https(rdata1, rdata2));
 }
@@ -180,5 +181,3 @@ dns_rdata_in_https_current(dns_rdata_in_https_t *https, isc_region_t *region) {
 
 	generic_rdata_in_svcb_current(https, region);
 }
-
-#endif /* RDATA_IN_1_HTTPS_65_C */
