@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -14,7 +16,6 @@
 
 #include <isc/buffer.h>
 #include <isc/mem.h>
-#include <isc/print.h>
 #include <isc/region.h>
 #include <isc/stdio.h>
 #include <isc/string.h>
@@ -43,7 +44,7 @@
 dst_key_t *key;
 dns_fixedname_t fname;
 dns_name_t *name;
-unsigned int bits = 1024U;
+unsigned int bits = 2048U;
 isc_mem_t *mctx;
 isc_log_t *log_;
 isc_logconfig_t *logconfig;
@@ -65,6 +66,7 @@ EVP_PKEY *pkey;
 				"%d\n",                                       \
 				msg, isc_result_totext(result), __FILE__,     \
 				__LINE__);                                    \
+			ERR_clear_error();                                    \
 			exit(1);                                              \
 		}                                                             \
 	} while (0)
@@ -82,6 +84,7 @@ main(int argc, char **argv) {
 	    !EVP_PKEY_set1_RSA(pkey, rsa))
 	{
 		fprintf(stderr, "fatal error: basic OpenSSL failure\n");
+		ERR_clear_error();
 		exit(1);
 	}
 
@@ -97,6 +100,7 @@ main(int argc, char **argv) {
 			"fatal error: RSA_generate_key_ex() fails "
 			"at file %s line %d\n",
 			__FILE__, __LINE__);
+		ERR_clear_error();
 		exit(1);
 	}
 
@@ -127,7 +131,7 @@ main(int argc, char **argv) {
 								    "\"example."
 								    "\")");
 
-	CHECK(dst_key_buildinternal(name, DNS_KEYALG_RSASHA1, bits,
+	CHECK(dst_key_buildinternal(name, DNS_KEYALG_RSASHA256, bits,
 				    DNS_KEYOWNER_ZONE, DNS_KEYPROTO_DNSSEC,
 				    dns_rdataclass_in, pkey, mctx, &key),
 	      "dst_key_buildinternal(...)");

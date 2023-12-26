@@ -11,27 +11,38 @@ dist-hook:
 
 SUBDIRS = dyndb/driver dlzexternal/driver hooks/driver
 
+if DNSRPS
+SUBDIRS += rpz/testlib
+endif
+
 AM_CPPFLAGS +=			\
-	$(LIBISC_CFLAGS)
+	$(LIBISC_CFLAGS) 	\
+	$(LIBDNS_CFLAGS)
 
 LDADD +=			\
-	$(LIBISC_LIBS)
+	$(LIBISC_LIBS)		\
+	$(LIBDNS_LIBS)
 
 if HAVE_PERL
+if HAVE_PYTHON
+if HAVE_PYTEST
 
-check_PROGRAMS =		\
+noinst_PROGRAMS =		\
 	feature-test		\
 	makejournal		\
 	pipelined/pipequeries	\
-	resolve			\
 	rndc/gencheck		\
-	rpz/dnsrps		\
-	tkey/keycreate		\
-	tkey/keydelete
+	rpz/dnsrps
 
 feature_test_CPPFLAGS =		\
 	$(AM_CPPFLAGS)		\
-	$(LIBDNS_CFLAGS)
+	$(LIBDNS_CFLAGS)	\
+	$(OPENSSL_CFLAGS)
+
+feature_test_LDADD =		\
+	$(LDADD)		\
+	$(LIBDNS_LIBS)		\
+	$(OPENSSL_LIBS)
 
 makejournal_CPPFLAGS =		\
 	$(AM_CPPFLAGS)		\
@@ -49,47 +60,24 @@ pipelined_pipequeries_LDADD =	\
 	$(LDADD)		\
 	$(LIBDNS_LIBS)
 
-resolve_CPPFLAGS =		\
+rpz_dnsrps_CPPFLAGS =		\
 	$(AM_CPPFLAGS)		\
-	$(LIBISC_CFLAGS)	\
 	$(LIBDNS_CFLAGS)	\
-	$(LIBIRS_CFLAGS)
+	-DLIBRPZ_LIB_OPEN=\"$(abs_builddir)/rpz/testlib/.libs/libdummyrpz.so\"
 
-resolve_LDADD = $(LIBISC_LIBS) $(LIBIRS_LIBS) $(LIBDNS_LIBS)
-
-tkey_keycreate_CPPFLAGS =	\
-	$(AM_CPPFLAGS)		\
-	$(LIBDNS_CFLAGS)
-
-tkey_keycreate_LDADD =		\
+rpz_dnsrps_LDADD =		\
 	$(LDADD)		\
-	$(LIBDNS_LIBS)
+	$(LIBDNS_LIBS)		\
+	$(DLOPEN_LIBS)
 
-tkey_keydelete_CPPFLAGS =	\
-	$(AM_CPPFLAGS)		\
-	$(LIBDNS_CFLAGS)
-
-tkey_keydelete_LDADD =		\
-	$(LDADD)		\
-	$(LIBDNS_LIBS)
-
-TESTS =
-
-if HAVE_PERLMOD_TIME_HIRES
-TESTS += serve-stale
-endif HAVE_PERLMOD_TIME_HIRES
-
-if HAVE_PERLMOD_NET_DNS
-TESTS +=		\
-	rpzrecurse
-endif HAVE_PERLMOD_NET_DNS
-
-if HAVE_LIBNGHTTP2
-TESTS +=		\
-	doth
-endif
-
-TESTS +=			\
+# Longer running tests are listed (and executed) first to take the most
+# advantage of parallel execution.
+TESTS =				\
+	rpz			\
+	rpzrecurse		\
+	serve-stale		\
+	timeouts		\
+	upforwd			\
 	acl			\
 	additional		\
 	addzone			\
@@ -101,30 +89,45 @@ TESTS +=			\
 	case			\
 	catz			\
 	cds			\
+	chain			\
 	checkconf		\
+	checkds			\
 	checknames		\
 	checkzone		\
+	cookie			\
 	database		\
+	dialup			\
+	digdelv			\
+	dispatch		\
 	dlzexternal		\
 	dns64			\
-	dscp			\
+	dnssec			\
+	dnstap			\
+	doth			\
 	dsdigest		\
 	dyndb			\
 	ecdsa			\
 	eddsa			\
 	ednscompliance		\
 	emptyzones		\
+	enginepkcs11		\
 	filter-aaaa		\
+	fetchlimit		\
 	formerr			\
+	forward			\
 	geoip2			\
 	glue			\
 	idna			\
 	include-multiplecfg	\
 	inline			\
 	integrity		\
+	ixfr			\
 	hooks			\
+	host			\
 	journal			\
+	kasp			\
 	keepalive		\
+	keyfromlabel		\
 	legacy			\
 	limits			\
 	logfileconfig		\
@@ -133,30 +136,43 @@ TESTS +=			\
 	metadata		\
 	mirror			\
 	mkeys			\
+	multisigner		\
 	names			\
 	notify			\
 	nsec3			\
 	nslookup		\
+	nsupdate		\
+	nzd2nzf			\
 	padding			\
 	pending			\
+	proxy			\
+	pipelined		\
+	qmin			\
+	reclimit		\
 	redirect		\
+	resolver		\
 	rndc			\
 	rootkeysentinel		\
-	rpz			\
+	rpzextra		\
 	rrchecker		\
 	rrl			\
 	rrsetorder		\
 	rsabigexponent		\
 	runtime			\
 	sfcache			\
+	shutdown		\
 	smartsign		\
 	sortlist		\
 	spf			\
 	staticstub		\
+	statistics		\
+	statschannel		\
+	stress			\
 	stub			\
 	synthfromdnssec		\
-	tkey			\
+	tcp			\
 	tools			\
+	transport-acl		\
 	tsig			\
 	tsiggss			\
 	ttl			\
@@ -164,71 +180,21 @@ TESTS +=			\
 	verify			\
 	views			\
 	wildcard		\
+	xfer			\
 	xferquota		\
+	zero			\
 	zonechecks
 
-# The "stress" test is not run by default since it creates enough
-# load on the machine to make it unusable to other users.
-# The "dialup", "delzone", and "dupsigs" tests are also not run by
-# default because they take a very long time to complete.
-# TESTS += delzone dialup dupsigs stress
-
-if HAVE_LMDB
-TESTS += nzd2nzf
-endif # HAVE_LMDB
-
-if HAVE_PERLMOD_NET_DNS
-
-TESTS +=		\
-	digdelv		\
-	fetchlimit	\
-	forward		\
-	ixfr		\
-	nsupdate	\
-	resolver	\
-	statistics	\
-	upforwd		\
-	zero
-
-if HAVE_DNSTAP
-TESTS += dnstap
-endif
-
-if HAVE_PERLMOD_FILE_FETCH
-TESTS += statschannel
-endif HAVE_PERLMOD_FILE_FETCH
-
-if HAVE_PERLMOD_DIGEST_HMAC
-TESTS += xfer
-endif HAVE_PERLMOD_DIGEST_HMAC
-
-if HAVE_PERLMOD_NET_DNS_NAMESERVER
-TESTS += reclimit
-endif HAVE_PERLMOD_NET_DNS_NAMESERVER
-
-endif HAVE_PERLMOD_NET_DNS
-
-if HAVE_PYTHON
-TESTS += kasp keymgr2kasp tcp pipelined
-
-if HAVE_PYMOD_DNS
-TESTS += checkds qmin cookie timeouts
-
-if HAVE_PERLMOD_NET_DNS
-TESTS += dnssec
-if HAVE_PERLMOD_NET_DNS_NAMESERVER
-TESTS += chain
-endif HAVE_PERLMOD_NET_DNS_NAMESERVER
-endif HAVE_PERLMOD_NET_DNS
-
-if HAVE_PYTEST
-TESTS += rpzextra shutdown
-endif
-
-endif HAVE_PYMOD_DNS
-
-endif HAVE_PYTHON
-
+else !HAVE_PYTEST
+check:
+	echo pytest is not available, no tests were ran
+	exit 1
+endif !HAVE_PYTEST
+else !HAVE_PYTHON
+check:
+	echo Python is not available, no tests were ran
+	exit 1
+endif !HAVE_PYTHON
 else !HAVE_PERL
 check:
 	echo Perl is not available, no tests were ran
@@ -243,9 +209,9 @@ LOG_DRIVER_V_1 = --verbose yes
 LOG_DRIVER = $(srcdir)/custom-test-driver
 AM_LOG_DRIVER_FLAGS = $(LOG_DRIVER_V)
 
-LOG_COMPILER = $(builddir)/run.sh
-AM_LOG_FLAGS = -r
-
-$(TESTS): run.sh
+LOG_COMPILER = $(srcdir)/run.sh
 
 test-local: check
+
+clean-local::
+	-find -L . -mindepth 1 -maxdepth 1 -type d -name "*_*" -and -not -name "_common" -exec rm -rf {} \;

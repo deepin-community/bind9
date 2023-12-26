@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -38,7 +40,6 @@
 #include <isc/commandline.h>
 #include <isc/hex.h>
 #include <isc/mem.h>
-#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/string.h>
 #include <isc/util.h>
@@ -56,6 +57,7 @@ bool memrecord = false;
 bool printmessage = false;
 bool hexmessage = false;
 bool yaml = false;
+bool timestampmillis = false;
 
 const char *program = "dnstap-read";
 
@@ -69,7 +71,7 @@ const char *program = "dnstap-read";
 		}                                                     \
 	} while (0)
 
-ISC_NORETURN static void
+noreturn static void
 fatal(const char *format, ...);
 
 static void
@@ -89,6 +91,8 @@ usage(void) {
 	fprintf(stderr, "dnstap-read [-mpxy] [filename]\n");
 	fprintf(stderr, "\t-m\ttrace memory allocations\n");
 	fprintf(stderr, "\t-p\tprint the full DNS message\n");
+	fprintf(stderr,
+		"\t-t\tprint long timestamps with millisecond precision\n");
 	fprintf(stderr, "\t-x\tuse hex format to print DNS message\n");
 	fprintf(stderr, "\t-y\tprint YAML format (implies -p)\n");
 }
@@ -155,7 +159,7 @@ print_packet(dns_dtdata_t *dt, const dns_master_style_t *style) {
 		}
 
 		for (;;) {
-			isc_buffer_reserve(&b, textlen);
+			isc_buffer_reserve(b, textlen);
 			if (b == NULL) {
 				fatal("out of memory");
 			}
@@ -230,13 +234,21 @@ print_yaml(dns_dtdata_t *dt) {
 
 	if (!isc_time_isepoch(&dt->qtime)) {
 		char buf[100];
-		isc_time_formatISO8601(&dt->qtime, buf, sizeof(buf));
+		if (timestampmillis) {
+			isc_time_formatISO8601ms(&dt->qtime, buf, sizeof(buf));
+		} else {
+			isc_time_formatISO8601(&dt->qtime, buf, sizeof(buf));
+		}
 		printf("  query_time: !!timestamp %s\n", buf);
 	}
 
 	if (!isc_time_isepoch(&dt->rtime)) {
 		char buf[100];
-		isc_time_formatISO8601(&dt->rtime, buf, sizeof(buf));
+		if (timestampmillis) {
+			isc_time_formatISO8601ms(&dt->rtime, buf, sizeof(buf));
+		} else {
+			isc_time_formatISO8601(&dt->rtime, buf, sizeof(buf));
+		}
 		printf("  response_time: !!timestamp %s\n", buf);
 	}
 
@@ -264,7 +276,7 @@ print_yaml(dns_dtdata_t *dt) {
 
 		(void)inet_ntop(ip->len == 4 ? AF_INET : AF_INET6, ip->data,
 				buf, sizeof(buf));
-		printf("  query_address: %s\n", buf);
+		printf("  query_address: \"%s\"\n", buf);
 	}
 
 	if (m->has_response_address) {
@@ -273,7 +285,7 @@ print_yaml(dns_dtdata_t *dt) {
 
 		(void)inet_ntop(ip->len == 4 ? AF_INET : AF_INET6, ip->data,
 				buf, sizeof(buf));
-		printf("  response_address: %s\n", buf);
+		printf("  response_address: \"%s\"\n", buf);
 	}
 
 	if (m->has_query_port) {
@@ -289,15 +301,14 @@ print_yaml(dns_dtdata_t *dt) {
 		dns_fixedname_t fn;
 		dns_name_t *name;
 		isc_buffer_t b;
-		dns_decompress_t dctx;
 
 		name = dns_fixedname_initname(&fn);
 
 		isc_buffer_init(&b, m->query_zone.data, m->query_zone.len);
 		isc_buffer_add(&b, m->query_zone.len);
 
-		dns_decompress_init(&dctx, -1, DNS_DECOMPRESS_NONE);
-		result = dns_name_fromwire(name, &b, &dctx, 0, NULL);
+		result = dns_name_fromwire(name, &b, DNS_DECOMPRESS_NEVER,
+					   NULL);
 		if (result == ISC_R_SUCCESS) {
 			printf("  query_zone: ");
 			dns_name_print(name, stdout);
@@ -325,12 +336,11 @@ int
 main(int argc, char *argv[]) {
 	isc_result_t result;
 	dns_message_t *message = NULL;
-	isc_buffer_t *b = NULL;
 	dns_dtdata_t *dt = NULL;
 	dns_dthandle_t *handle = NULL;
 	int rv = 0, ch;
 
-	while ((ch = isc_commandline_parse(argc, argv, "mpxy")) != -1) {
+	while ((ch = isc_commandline_parse(argc, argv, "mptxy")) != -1) {
 		switch (ch) {
 		case 'm':
 			isc_mem_debugging |= ISC_MEM_DEBUGRECORD;
@@ -338,6 +348,9 @@ main(int argc, char *argv[]) {
 			break;
 		case 'p':
 			printmessage = true;
+			break;
+		case 't':
+			timestampmillis = true;
 			break;
 		case 'x':
 			hexmessage = true;
@@ -378,17 +391,8 @@ main(int argc, char *argv[]) {
 		input.base = data;
 		input.length = datalen;
 
-		if (b != NULL) {
-			isc_buffer_free(&b);
-		}
-		isc_buffer_allocate(mctx, &b, 2048);
-		if (b == NULL) {
-			fatal("out of memory");
-		}
-
 		result = dns_dt_parse(mctx, &input, &dt);
 		if (result != ISC_R_SUCCESS) {
-			isc_buffer_free(&b);
 			continue;
 		}
 
@@ -416,9 +420,6 @@ cleanup:
 	}
 	if (message != NULL) {
 		dns_message_detach(&message);
-	}
-	if (b != NULL) {
-		isc_buffer_free(&b);
 	}
 	isc_mem_destroy(&mctx);
 

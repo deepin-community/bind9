@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -10,7 +12,6 @@
  */
 
 #include <isc/log.h>
-#include <isc/print.h>
 #include <isc/result.h>
 
 #include <dns/message.h>
@@ -128,7 +129,7 @@ ns_notify_start(ns_client_t *client, isc_nmhandle_t *handle) {
 
 	tsigkey = dns_message_gettsigkey(request);
 	if (tsigkey != NULL) {
-		dns_name_format(&tsigkey->name, namebuf, sizeof(namebuf));
+		dns_name_format(tsigkey->name, namebuf, sizeof(namebuf));
 
 		if (tsigkey->generated) {
 			char cnamebuf[DNS_NAME_FORMATSIZE];
@@ -145,7 +146,8 @@ ns_notify_start(ns_client_t *client, isc_nmhandle_t *handle) {
 	}
 
 	dns_name_format(zonename, namebuf, sizeof(namebuf));
-	result = dns_zt_find(client->view->zonetable, zonename, 0, NULL, &zone);
+	result = dns_view_findzone(client->view, zonename, DNS_ZTFIND_EXACT,
+				   &zone);
 	if (result == ISC_R_SUCCESS) {
 		dns_zonetype_t zonetype = dns_zone_gettype(zone);
 
@@ -165,10 +167,10 @@ ns_notify_start(ns_client_t *client, isc_nmhandle_t *handle) {
 		}
 	}
 
-	notify_log(client, ISC_LOG_NOTICE,
-		   "received notify for zone '%s'%s: not authoritative",
-		   namebuf, tsigbuf);
 	result = DNS_R_NOTAUTH;
+	notify_log(client, ISC_LOG_NOTICE,
+		   "received notify for zone '%s'%s: %s", namebuf, tsigbuf,
+		   isc_result_totext(result));
 
 done:
 	if (zone != NULL) {

@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -23,8 +25,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <isc/app.h>
 #include <isc/condition.h>
+#include <isc/loop.h>
 #include <isc/mutex.h>
 #include <isc/thread.h>
 #include <isc/util.h>
@@ -124,7 +126,7 @@ fuzz_thread_client(void *arg) {
 				close(sockfd);
 				named_server_flushonshutdown(named_g_server,
 							     false);
-				isc_app_shutdown();
+				isc_loopmgr_shutdown(named_g_loopmgr);
 				return (NULL);
 			}
 			raise(SIGSTOP);
@@ -157,7 +159,7 @@ fuzz_thread_client(void *arg) {
 	close(sockfd);
 
 	named_server_flushonshutdown(named_g_server, false);
-	isc_app_shutdown();
+	isc_loopmgr_shutdown(named_g_loopmgr);
 
 	return (NULL);
 }
@@ -372,7 +374,7 @@ fuzz_thread_resolver(void *arg) {
 				close(listenfd);
 				named_server_flushonshutdown(named_g_server,
 							     false);
-				isc_app_shutdown();
+				isc_loopmgr_shutdown(named_g_loopmgr);
 				return (NULL);
 			}
 			raise(SIGSTOP);
@@ -572,7 +574,7 @@ fuzz_thread_resolver(void *arg) {
 	close(sockfd);
 	close(listenfd);
 	named_server_flushonshutdown(named_g_server, false);
-	isc_app_shutdown();
+	isc_loopmgr_shutdown(named_g_loopmgr);
 
 #ifdef __AFL_LOOP
 	/*
@@ -714,7 +716,7 @@ fuzz_thread_tcp(void *arg) {
 	free(buf);
 	close(sockfd);
 	named_server_flushonshutdown(named_g_server, false);
-	isc_app_shutdown();
+	isc_loopmgr_shutdown(named_g_loopmgr);
 
 	return (NULL);
 }
@@ -731,7 +733,7 @@ named_fuzz_notify(void) {
 #ifdef ENABLE_AFL
 	if (getenv("AFL_CMIN")) {
 		named_server_flushonshutdown(named_g_server, false);
-		isc_app_shutdown();
+		isc_loopmgr_shutdown(named_g_loopmgr);
 		return;
 	}
 

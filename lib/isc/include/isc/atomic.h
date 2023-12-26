@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -11,11 +13,9 @@
 
 #pragma once
 
-#if __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
 #include <stdatomic.h>
-#else
-#include <isc/stdatomic.h>
-#endif
+
+#include <isc/util.h>
 
 /*
  * We define a few additional macros to make things easier
@@ -42,9 +42,6 @@
 #define atomic_compare_exchange_strong_relaxed(o, e, d) \
 	atomic_compare_exchange_strong_explicit(        \
 		(o), (e), (d), memory_order_relaxed, memory_order_relaxed)
-#define atomic_compare_exchange_strong_acq_rel(o, e, d) \
-	atomic_compare_exchange_strong_explicit(        \
-		(o), (e), (d), memory_order_acq_rel, memory_order_acquire)
 
 /* Acquire-Release Memory Ordering */
 
@@ -59,6 +56,8 @@
 	atomic_fetch_and_explicit((o), (v), memory_order_release)
 #define atomic_fetch_or_release(o, v) \
 	atomic_fetch_or_explicit((o), (v), memory_order_release)
+#define atomic_exchange_acquire(o, v) \
+	atomic_exchange_explicit((o), (v), memory_order_acquire)
 #define atomic_exchange_acq_rel(o, v) \
 	atomic_exchange_explicit((o), (v), memory_order_acq_rel)
 #define atomic_fetch_sub_acq_rel(o, v) \
@@ -69,3 +68,10 @@
 #define atomic_compare_exchange_strong_acq_rel(o, e, d) \
 	atomic_compare_exchange_strong_explicit(        \
 		(o), (e), (d), memory_order_acq_rel, memory_order_acquire)
+
+/* compare/exchange that MUST succeed */
+#define atomic_compare_exchange_enforced(o, e, d) \
+	RUNTIME_CHECK(atomic_compare_exchange_strong((o), (e), (d)))
+
+/* more comfortable atomic pointer declarations */
+#define atomic_ptr(type) _Atomic(type *)

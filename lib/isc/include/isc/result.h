@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef ISC_RESULT_H
-#define ISC_RESULT_H 1
+#pragma once
 
 /*! \file isc/result.h */
 
@@ -91,9 +92,12 @@ typedef enum isc_result {
 	ISC_R_DEFAULT,		      /*%< default */
 	ISC_R_IPV4PREFIX,	      /*%< IPv4 prefix */
 	ISC_R_TLSERROR,		      /*%< TLS error */
-	ISC_R_HTTP2ALPNERROR,	      /*%< ALPN for HTTP/2 failed */
+	ISC_R_TLSBADPEERCERT, /*%< TLS peer certificate verification failed */
+	ISC_R_HTTP2ALPNERROR, /*%< ALPN for HTTP/2 failed */
+	ISC_R_DOTALPNERROR,   /*%< ALPN for DoT failed */
+	ISC_R_INVALIDPROTO,   /*%< invalid protocol */
 
-	DNS_R_LABELTOOLONG = 1 << 16,
+	DNS_R_LABELTOOLONG,
 	DNS_R_BADESCAPE,
 	DNS_R_EMPTYLABEL,
 	DNS_R_BADDOTTEDQUAD,
@@ -196,7 +200,7 @@ typedef enum isc_result {
 	DNS_R_MXISADDRESS,
 	DNS_R_DUPLICATE,
 	DNS_R_INVALIDNSEC3,
-	DNS_R_NOTMASTER,
+	DNS_R_NOTPRIMARY,
 	DNS_R_BROKENCHAIN,
 	DNS_R_EXPIRED,
 	DNS_R_NOTDYNAMIC,
@@ -219,8 +223,11 @@ typedef enum isc_result {
 	DNS_R_NSEC3BADALG,
 	DNS_R_NSEC3RESALT,
 	DNS_R_INCONSISTENTRR,
+	DNS_R_HAVEPARMKEYS,
+	DNS_R_NOALPN,
+	DNS_R_NODOHPATH,
 
-	DST_R_UNSUPPORTEDALG = 2 << 16,
+	DST_R_UNSUPPORTEDALG,
 	DST_R_CRYPTOFAILURE,
 	/* compat */
 	DST_R_OPENSSLFAILURE = DST_R_CRYPTOFAILURE,
@@ -241,7 +248,7 @@ typedef enum isc_result {
 	DST_R_NOENGINE,
 	DST_R_EXTERNALKEY,
 
-	DNS_R_NOERROR = 3 << 16,
+	DNS_R_NOERROR,
 	DNS_R_FORMERR,
 	DNS_R_SERVFAIL,
 	DNS_R_NXDOMAIN,
@@ -258,15 +265,17 @@ typedef enum isc_result {
 	DNS_R_RCODE14,
 	DNS_R_RCODE15,
 	DNS_R_BADVERS,
+	DNS_R_BADCOOKIE = DNS_R_NOERROR + 23,
 
-	ISCCC_R_UNKNOWNVERSION = 5 << 16,
+	ISCCC_R_UNKNOWNVERSION,
 	ISCCC_R_SYNTAX,
 	ISCCC_R_BADAUTH,
 	ISCCC_R_EXPIRED,
 	ISCCC_R_CLOCKSKEW,
 	ISCCC_R_DUPLICATE,
+	ISCCC_R_MAXDEPTH,
 
-	ISC_R_NRESULTS = ISCCC_R_DUPLICATE + 1, /*% The number of results. */
+	ISC_R_NRESULTS, /*% The number of results. */
 	ISC_R_MAKE_ENUM_32BIT = INT32_MAX,
 } isc_result_t;
 
@@ -284,5 +293,3 @@ const char *isc_result_toid(isc_result_t);
  */
 
 ISC_LANG_ENDDECLS
-
-#endif /* ISC_RESULT_H */

@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -28,7 +30,6 @@
 #include <isc/file.h>
 #include <isc/hash.h>
 #include <isc/mem.h>
-#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/serial.h>
 #include <isc/string.h>
@@ -123,14 +124,28 @@ typedef isc_result_t
 ds_maker_func_t(isc_buffer_t *buf, dns_rdata_t *ds, dns_dsdigest_t dt,
 		dns_rdata_t *crdata);
 
-static dns_rdataset_t cdnskey_set, cdnskey_sig;
-static dns_rdataset_t cds_set, cds_sig;
-static dns_rdataset_t dnskey_set, dnskey_sig;
-static dns_rdataset_t old_ds_set, new_ds_set;
+static dns_rdataset_t cdnskey_set = DNS_RDATASET_INIT;
+static dns_rdataset_t cdnskey_sig = DNS_RDATASET_INIT;
+static dns_rdataset_t cds_set = DNS_RDATASET_INIT;
+static dns_rdataset_t cds_sig = DNS_RDATASET_INIT;
+static dns_rdataset_t dnskey_set = DNS_RDATASET_INIT;
+static dns_rdataset_t dnskey_sig = DNS_RDATASET_INIT;
+static dns_rdataset_t old_ds_set = DNS_RDATASET_INIT;
+static dns_rdataset_t new_ds_set = DNS_RDATASET_INIT;
 
-static keyinfo_t *old_key_tbl, *new_key_tbl;
+static keyinfo_t *old_key_tbl = NULL, *new_key_tbl = NULL;
 
 isc_buffer_t *new_ds_buf = NULL; /* backing store for new_ds_set */
+
+static dns_db_t *child_db = NULL;
+static dns_dbnode_t *child_node = NULL;
+static dns_db_t *parent_db = NULL;
+static dns_dbnode_t *parent_node = NULL;
+static dns_db_t *update_db = NULL;
+static dns_dbnode_t *update_node = NULL;
+static dns_dbversion_t *update_version = NULL;
+static bool cleanup_dst = false;
+static bool print_mem_stats = false;
 
 static void
 verbose_time(int level, const char *msg, isc_stdtime_t time) {
@@ -249,21 +264,27 @@ load_db(const char *filename, dns_db_t **dbp, dns_dbnode_t **nodep) {
 }
 
 static void
-free_db(dns_db_t **dbp, dns_dbnode_t **nodep) {
-	dns_db_detachnode(*dbp, nodep);
-	dns_db_detach(dbp);
+free_db(dns_db_t **dbp, dns_dbnode_t **nodep, dns_dbversion_t **versionp) {
+	if (*dbp != NULL) {
+		if (*nodep != NULL) {
+			dns_db_detachnode(*dbp, nodep);
+		}
+		if (versionp != NULL && *versionp != NULL) {
+			dns_db_closeversion(*dbp, versionp, false);
+		}
+		dns_db_detach(dbp);
+	}
 }
 
 static void
 load_child_sets(const char *file) {
-	dns_db_t *db = NULL;
-	dns_dbnode_t *node = NULL;
-
-	load_db(file, &db, &node);
-	findset(db, node, dns_rdatatype_dnskey, &dnskey_set, &dnskey_sig);
-	findset(db, node, dns_rdatatype_cdnskey, &cdnskey_set, &cdnskey_sig);
-	findset(db, node, dns_rdatatype_cds, &cds_set, &cds_sig);
-	free_db(&db, &node);
+	load_db(file, &child_db, &child_node);
+	findset(child_db, child_node, dns_rdatatype_dnskey, &dnskey_set,
+		&dnskey_sig);
+	findset(child_db, child_node, dns_rdatatype_cdnskey, &cdnskey_set,
+		&cdnskey_sig);
+	findset(child_db, child_node, dns_rdatatype_cds, &cds_set, &cds_sig);
+	free_db(&child_db, &child_node, NULL);
 }
 
 static void
@@ -312,8 +333,6 @@ get_dsset_name(char *filename, size_t size, const char *path,
 static void
 load_parent_set(const char *path) {
 	isc_result_t result;
-	dns_db_t *db = NULL;
-	dns_dbnode_t *node = NULL;
 	isc_time_t modtime;
 	char filename[PATH_MAX + 1];
 
@@ -326,21 +345,20 @@ load_parent_set(const char *path) {
 	}
 	notbefore = isc_time_seconds(&modtime);
 	if (startstr != NULL) {
-		isc_stdtime_t now;
-		isc_stdtime_get(&now);
+		isc_stdtime_t now = isc_stdtime_now();
 		notbefore = strtotime(startstr, now, notbefore, NULL);
 	}
 	verbose_time(1, "child records must not be signed before", notbefore);
 
-	load_db(filename, &db, &node);
-	findset(db, node, dns_rdatatype_ds, &old_ds_set, NULL);
+	load_db(filename, &parent_db, &parent_node);
+	findset(parent_db, parent_node, dns_rdatatype_ds, &old_ds_set, NULL);
 
 	if (!dns_rdataset_isassociated(&old_ds_set)) {
 		fatal("could not find DS records for %s in %s", namestr,
 		      filename);
 	}
 
-	free_db(&db, &node);
+	free_db(&parent_db, &parent_node, NULL);
 }
 
 #define MAX_CDS_RDATA_TEXT_SIZE DNS_RDATA_MAXLENGTH * 2
@@ -365,17 +383,18 @@ formatset(dns_rdataset_t *rdataset) {
 
 	isc_buffer_allocate(mctx, &buf, MAX_CDS_RDATA_TEXT_SIZE);
 	result = dns_master_rdatasettotext(name, rdataset, style, NULL, buf);
+	dns_master_styledestroy(&style, mctx);
 
 	if ((result == ISC_R_SUCCESS) && isc_buffer_availablelength(buf) < 1) {
 		result = ISC_R_NOSPACE;
 	}
 
-	check_result(result, "dns_rdataset_totext()");
+	if (result != ISC_R_SUCCESS) {
+		isc_buffer_free(&buf);
+		check_result(result, "dns_rdataset_totext()");
+	}
 
 	isc_buffer_putuint8(buf, 0);
-
-	dns_master_styledestroy(&style, mctx);
-
 	return (buf);
 }
 
@@ -418,6 +437,7 @@ write_parent_set(const char *path, const char *inplace, bool nsupdate,
 
 	result = isc_file_openunique(tmpname, &fp);
 	if (result != ISC_R_SUCCESS) {
+		isc_buffer_free(&buf);
 		fatal("open %s: %s", tmpname, isc_result_totext(result));
 	}
 	fprintf(fp, "%s", (char *)r.base);
@@ -512,23 +532,22 @@ static keyinfo_t *
 match_keyset_dsset(dns_rdataset_t *keyset, dns_rdataset_t *dsset,
 		   strictness_t strictness) {
 	isc_result_t result;
-	keyinfo_t *keytable;
+	keyinfo_t *keytable, *ki;
 	int i;
 
 	nkey = dns_rdataset_count(keyset);
 
-	keytable = isc_mem_get(mctx, sizeof(keyinfo_t) * nkey);
+	keytable = isc_mem_cget(mctx, nkey, sizeof(keytable[0]));
 
-	for (result = dns_rdataset_first(keyset), i = 0;
-	     result == ISC_R_SUCCESS; result = dns_rdataset_next(keyset), i++)
+	for (result = dns_rdataset_first(keyset), i = 0, ki = keytable;
+	     result == ISC_R_SUCCESS;
+	     result = dns_rdataset_next(keyset), i++, ki++)
 	{
-		keyinfo_t *ki;
 		dns_rdata_dnskey_t dnskey;
 		dns_rdata_t *keyrdata;
 		isc_region_t r;
 
 		INSIST(i < nkey);
-		ki = &keytable[i];
 		keyrdata = &ki->rdata;
 
 		dns_rdata_init(keyrdata);
@@ -566,14 +585,15 @@ free_keytable(keyinfo_t **keytable_p) {
 	keyinfo_t *ki;
 	int i;
 
-	for (i = 0; i < nkey; i++) {
-		ki = &keytable[i];
+	REQUIRE(keytable != NULL);
+
+	for (i = 0, ki = keytable; i < nkey; i++, ki++) {
 		if (ki->dst != NULL) {
 			dst_key_free(&ki->dst);
 		}
 	}
 
-	isc_mem_put(mctx, keytable, sizeof(keyinfo_t) * nkey);
+	isc_mem_cput(mctx, keytable, nkey, sizeof(keytable[0]));
 }
 
 /*
@@ -592,8 +612,9 @@ matching_sigs(keyinfo_t *keytbl, dns_rdataset_t *rdataset,
 	dns_secalg_t *algo;
 	int i;
 
-	algo = isc_mem_get(mctx, nkey);
-	memset(algo, 0, nkey);
+	REQUIRE(keytbl != NULL);
+
+	algo = isc_mem_cget(mctx, nkey, sizeof(algo[0]));
 
 	for (result = dns_rdataset_first(sigset); result == ISC_R_SUCCESS;
 	     result = dns_rdataset_next(sigset))
@@ -634,7 +655,8 @@ matching_sigs(keyinfo_t *keytbl, dns_rdataset_t *rdataset,
 						   NULL);
 
 			if (result != ISC_R_SUCCESS &&
-			    result != DNS_R_FROMWILDCARD) {
+			    result != DNS_R_FROMWILDCARD)
+			{
 				vbprintf(1,
 					 "skip RRSIG by key %d:"
 					 " verification failed: %s\n",
@@ -675,7 +697,7 @@ signed_loose(dns_secalg_t *algo) {
 			ok = true;
 		}
 	}
-	isc_mem_put(mctx, algo, nkey);
+	isc_mem_cput(mctx, algo, nkey, sizeof(algo[0]));
 	return (ok);
 }
 
@@ -717,7 +739,7 @@ signed_strict(dns_rdataset_t *dsset, dns_secalg_t *algo) {
 		}
 	}
 
-	isc_mem_put(mctx, algo, nkey);
+	isc_mem_cput(mctx, algo, nkey, sizeof(algo[0]));
 	return (all_ok);
 }
 
@@ -796,6 +818,7 @@ append_new_ds_set(ds_maker_func_t *ds_from_rdata, isc_buffer_t *buf,
 			isc_mem_put(mctx, ds, sizeof(*ds));
 			return (result);
 		default:
+			isc_mem_put(mctx, ds, sizeof(*ds));
 			check_result(result, "ds_from_rdata()");
 		}
 	}
@@ -806,12 +829,13 @@ append_new_ds_set(ds_maker_func_t *ds_from_rdata, isc_buffer_t *buf,
 static void
 make_new_ds_set(ds_maker_func_t *ds_from_rdata, uint32_t ttl,
 		dns_rdataset_t *crdset) {
-	isc_result_t result;
-	dns_rdatalist_t *dslist;
 	unsigned int size = 16;
-	unsigned i, n;
 
 	for (;;) {
+		isc_result_t result = ISC_R_SUCCESS;
+		dns_rdatalist_t *dslist = NULL;
+		size_t n;
+
 		dslist = isc_mem_get(mctx, sizeof(*dslist));
 		dns_rdatalist_init(dslist);
 		dslist->rdclass = rdclass;
@@ -819,13 +843,12 @@ make_new_ds_set(ds_maker_func_t *ds_from_rdata, uint32_t ttl,
 		dslist->ttl = ttl;
 
 		dns_rdataset_init(&new_ds_set);
-		result = dns_rdatalist_tordataset(dslist, &new_ds_set);
-		check_result(result, "dns_rdatalist_tordataset(dslist)");
+		dns_rdatalist_tordataset(dslist, &new_ds_set);
 
 		isc_buffer_allocate(mctx, &new_ds_buf, size);
 
 		n = sizeof(dtype) / sizeof(dtype[0]);
-		for (i = 0; i < n && dtype[i] != 0; i++) {
+		for (size_t i = 0; i < n && dtype[i] != 0; i++) {
 			result = append_new_ds_set(ds_from_rdata, new_ds_buf,
 						   dslist, dtype[i], crdset);
 			if (result != ISC_R_SUCCESS) {
@@ -843,7 +866,7 @@ make_new_ds_set(ds_maker_func_t *ds_from_rdata, uint32_t ttl,
 	}
 }
 
-static inline int
+static int
 rdata_cmp(const void *rdata1, const void *rdata2) {
 	return (dns_rdata_compare((const dns_rdata_t *)rdata1,
 				  (const dns_rdata_t *)rdata2));
@@ -871,7 +894,7 @@ consistent_digests(dns_rdataset_t *dsset) {
 
 	n = dns_rdataset_count(dsset);
 
-	arrdata = isc_mem_get(mctx, n * sizeof(dns_rdata_t));
+	arrdata = isc_mem_cget(mctx, n, sizeof(dns_rdata_t));
 
 	for (result = dns_rdataset_first(dsset), i = 0; result == ISC_R_SUCCESS;
 	     result = dns_rdataset_next(dsset), i++)
@@ -885,7 +908,7 @@ consistent_digests(dns_rdataset_t *dsset) {
 	/*
 	 * Convert sorted arrdata to more accessible format
 	 */
-	ds = isc_mem_get(mctx, n * sizeof(dns_rdata_ds_t));
+	ds = isc_mem_cget(mctx, n, sizeof(dns_rdata_ds_t));
 
 	for (i = 0; i < n; i++) {
 		result = dns_rdata_tostruct(&arrdata[i], &ds[i], NULL);
@@ -924,8 +947,8 @@ consistent_digests(dns_rdataset_t *dsset) {
 	/*
 	 * Done!
 	 */
-	isc_mem_put(mctx, ds, n * sizeof(dns_rdata_ds_t));
-	isc_mem_put(mctx, arrdata, n * sizeof(dns_rdata_t));
+	isc_mem_cput(mctx, ds, n, sizeof(dns_rdata_ds_t));
+	isc_mem_cput(mctx, arrdata, n, sizeof(dns_rdata_t));
 
 	return (match);
 }
@@ -953,32 +976,27 @@ static void
 update_diff(const char *cmd, uint32_t ttl, dns_rdataset_t *addset,
 	    dns_rdataset_t *delset) {
 	isc_result_t result;
-	dns_db_t *db;
-	dns_dbnode_t *node;
-	dns_dbversion_t *ver;
 	dns_rdataset_t diffset;
 	uint32_t save;
 
-	db = NULL;
 	result = dns_db_create(mctx, "rbt", name, dns_dbtype_zone, rdclass, 0,
-			       NULL, &db);
+			       NULL, &update_db);
 	check_result(result, "dns_db_create()");
 
-	ver = NULL;
-	result = dns_db_newversion(db, &ver);
+	result = dns_db_newversion(update_db, &update_version);
 	check_result(result, "dns_db_newversion()");
 
-	node = NULL;
-	result = dns_db_findnode(db, name, true, &node);
+	result = dns_db_findnode(update_db, name, true, &update_node);
 	check_result(result, "dns_db_findnode()");
 
 	dns_rdataset_init(&diffset);
 
-	result = dns_db_addrdataset(db, node, ver, 0, addset, DNS_DBADD_MERGE,
-				    NULL);
+	result = dns_db_addrdataset(update_db, update_node, update_version, 0,
+				    addset, DNS_DBADD_MERGE, NULL);
 	check_result(result, "dns_db_addrdataset()");
 
-	result = dns_db_subtractrdataset(db, node, ver, delset, 0, &diffset);
+	result = dns_db_subtractrdataset(update_db, update_node, update_version,
+					 delset, 0, &diffset);
 	if (result == DNS_R_UNCHANGED) {
 		save = addset->ttl;
 		addset->ttl = ttl;
@@ -991,9 +1009,7 @@ update_diff(const char *cmd, uint32_t ttl, dns_rdataset_t *addset,
 		dns_rdataset_disassociate(&diffset);
 	}
 
-	dns_db_detachnode(db, &node);
-	dns_db_closeversion(db, &ver, false);
-	dns_db_detach(&db);
+	free_db(&update_db, &update_node, &update_version);
 }
 
 static void
@@ -1013,7 +1029,7 @@ nsdiff(uint32_t ttl, dns_rdataset_t *oldset, dns_rdataset_t *newset) {
 	}
 }
 
-ISC_NORETURN static void
+noreturn static void
 usage(void);
 
 static void
@@ -1043,6 +1059,32 @@ usage(void) {
 	exit(1);
 }
 
+static void
+cleanup(void) {
+	free_db(&child_db, &child_node, NULL);
+	free_db(&parent_db, &parent_node, NULL);
+	free_db(&update_db, &update_node, &update_version);
+	if (old_key_tbl != NULL) {
+		free_keytable(&old_key_tbl);
+	}
+	if (new_key_tbl != NULL) {
+		free_keytable(&new_key_tbl);
+	}
+	free_all_sets();
+	if (lctx != NULL) {
+		cleanup_logging(&lctx);
+	}
+	if (cleanup_dst) {
+		dst_lib_destroy();
+	}
+	if (mctx != NULL) {
+		if (print_mem_stats && verbose > 10) {
+			isc_mem_stats(mctx, stdout);
+		}
+		isc_mem_destroy(&mctx);
+	}
+}
+
 int
 main(int argc, char *argv[]) {
 	const char *child_path = NULL;
@@ -1054,6 +1096,8 @@ main(int argc, char *argv[]) {
 	uint32_t ttl = 0;
 	int ch;
 	char *endp;
+
+	setfatalcallback(cleanup);
 
 	isc_mem_create(&mctx);
 
@@ -1083,7 +1127,8 @@ main(int argc, char *argv[]) {
 			 * optional, so that it works just like sed(1).
 			 */
 			if (isc_commandline_argument ==
-			    argv[isc_commandline_index - 1]) {
+			    argv[isc_commandline_index - 1])
+			{
 				isc_commandline_index--;
 				inplace = "";
 			} else {
@@ -1140,6 +1185,7 @@ main(int argc, char *argv[]) {
 		fatal("could not initialize dst: %s",
 		      isc_result_totext(result));
 	}
+	cleanup_dst = true;
 
 	if (ds_path == NULL) {
 		fatal("missing -d DS pathname");
@@ -1175,7 +1221,8 @@ main(int argc, char *argv[]) {
 		fatal("missing RRSIG CDNSKEY records for %s", namestr);
 	}
 	if (dns_rdataset_isassociated(&cds_set) &&
-	    !dns_rdataset_isassociated(&cds_sig)) {
+	    !dns_rdataset_isassociated(&cds_sig))
+	{
 		fatal("missing RRSIG CDS records for %s", namestr);
 	}
 
@@ -1198,7 +1245,8 @@ main(int argc, char *argv[]) {
 	if (dns_rdataset_isassociated(&cdnskey_set)) {
 		vbprintf(1, "verify CDNSKEY signature(s)\n");
 		if (!signed_loose(matching_sigs(old_key_tbl, &cdnskey_set,
-						&cdnskey_sig))) {
+						&cdnskey_sig)))
+		{
 			fatal("could not validate child CDNSKEY RRset for %s",
 			      namestr);
 		}
@@ -1206,7 +1254,8 @@ main(int argc, char *argv[]) {
 	if (dns_rdataset_isassociated(&cds_set)) {
 		vbprintf(1, "verify CDS signature(s)\n");
 		if (!signed_loose(
-			    matching_sigs(old_key_tbl, &cds_set, &cds_sig))) {
+			    matching_sigs(old_key_tbl, &cds_set, &cds_sig)))
+		{
 			fatal("could not validate child CDS RRset for %s",
 			      namestr);
 		}
@@ -1236,7 +1285,7 @@ main(int argc, char *argv[]) {
 		vbprintf(1, "%s has neither CDS nor CDNSKEY records\n",
 			 namestr);
 		write_parent_set(ds_path, inplace, nsupdate, &old_ds_set);
-		exit(0);
+		goto cleanup;
 	}
 
 	/*
@@ -1302,13 +1351,8 @@ main(int argc, char *argv[]) {
 
 	write_parent_set(ds_path, inplace, nsupdate, &new_ds_set);
 
-	free_all_sets();
-	cleanup_logging(&lctx);
-	dst_lib_destroy();
-	if (verbose > 10) {
-		isc_mem_stats(mctx, stdout);
-	}
-	isc_mem_destroy(&mctx);
-
+cleanup:
+	print_mem_stats = true;
+	cleanup();
 	exit(0);
 }

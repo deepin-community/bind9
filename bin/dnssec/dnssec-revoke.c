@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -22,7 +24,6 @@
 #include <isc/file.h>
 #include <isc/hash.h>
 #include <isc/mem.h>
-#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/string.h>
 #include <isc/util.h>
@@ -37,7 +38,7 @@ const char *program = "dnssec-revoke";
 
 static isc_mem_t *mctx = NULL;
 
-ISC_NORETURN static void
+noreturn static void
 usage(void);
 
 static void
@@ -117,7 +118,7 @@ main(int argc, char **argv) {
 				fprintf(stderr, "%s: invalid argument -%c\n",
 					program, isc_commandline_option);
 			}
-		/* FALLTHROUGH */
+			FALLTHROUGH;
 		case 'h':
 			/* Does not return. */
 			usage();
@@ -134,7 +135,8 @@ main(int argc, char **argv) {
 	}
 
 	if (argc < isc_commandline_index + 1 ||
-	    argv[isc_commandline_index] == NULL) {
+	    argv[isc_commandline_index] == NULL)
+	{
 		fatal("The key file name was not specified");
 	}
 	if (argc > isc_commandline_index + 1) {
@@ -188,7 +190,7 @@ main(int argc, char **argv) {
 
 	flags = dst_key_flags(key);
 	if ((flags & DNS_KEYFLAG_REVOKE) == 0) {
-		isc_stdtime_t now;
+		isc_stdtime_t now = isc_stdtime_now();
 
 		if ((flags & DNS_KEYFLAG_KSK) == 0) {
 			fprintf(stderr,
@@ -198,7 +200,6 @@ main(int argc, char **argv) {
 				program);
 		}
 
-		isc_stdtime_get(&now);
 		dst_key_settime(key, DST_TIME_REVOKE, now);
 
 		dst_key_setflags(key, flags | DNS_KEYFLAG_REVOKE);

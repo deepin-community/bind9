@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -121,31 +123,26 @@ _comp_with_mask(void *addr, void *dest, u_int mask) {
 		u_int m = ((~0U) << (8 - (mask % 8)));
 
 		if ((mask % 8) == 0 ||
-		    (((u_char *)addr)[n] & m) == (((u_char *)dest)[n] & m)) {
+		    (((u_char *)addr)[n] & m) == (((u_char *)dest)[n] & m))
+		{
 			return (1);
 		}
 	}
 	return (0);
 }
 
-isc_result_t
+void
 isc_radix_create(isc_mem_t *mctx, isc_radix_tree_t **target, int maxbits) {
-	isc_radix_tree_t *radix;
-
 	REQUIRE(target != NULL && *target == NULL);
+	RUNTIME_CHECK(maxbits <= RADIX_MAXBITS);
 
-	radix = isc_mem_get(mctx, sizeof(isc_radix_tree_t));
-
-	radix->mctx = NULL;
+	isc_radix_tree_t *radix = isc_mem_get(mctx, sizeof(isc_radix_tree_t));
+	*radix = (isc_radix_tree_t){
+		.maxbits = maxbits,
+		.magic = RADIX_TREE_MAGIC,
+	};
 	isc_mem_attach(mctx, &radix->mctx);
-	radix->maxbits = maxbits;
-	radix->head = NULL;
-	radix->num_active_node = 0;
-	radix->num_added_node = 0;
-	RUNTIME_CHECK(maxbits <= RADIX_MAXBITS); /* XXX */
-	radix->magic = RADIX_TREE_MAGIC;
 	*target = radix;
-	return (ISC_R_SUCCESS);
 }
 
 /*
@@ -422,7 +419,8 @@ isc_radix_insert(isc_radix_tree_t *radix, isc_radix_node_t **target,
 				/* Merging nodes */
 				for (i = 0; i < RADIX_FAMILIES; i++) {
 					if (node->node_num[i] == -1 &&
-					    source->node_num[i] != -1) {
+					    source->node_num[i] != -1)
+					{
 						node->node_num[i] =
 							radix->num_added_node +
 							source->node_num[i];
@@ -690,13 +688,13 @@ isc_radix_remove(isc_radix_tree_t *radix, isc_radix_node_t *node) {
 		return;
 	}
 
-	isc_mem_put(radix->mctx, node, sizeof(*node));
-	radix->num_active_node--;
-
 	if (parent->r == node) {
 		parent->r = child;
 	} else {
 		INSIST(parent->l == node);
 		parent->l = child;
 	}
+
+	isc_mem_put(radix->mctx, node, sizeof(*node));
+	radix->num_active_node--;
 }

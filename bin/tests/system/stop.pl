@@ -1,9 +1,11 @@
 #!/usr/bin/perl -w
-#
+
 # Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
+# SPDX-License-Identifier: MPL-2.0
+#
 # This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
+# License, v. 2.0.  If a copy of the MPL was not distributed with this
 # file, you can obtain one at https://mozilla.org/MPL/2.0/.
 #
 # See the COPYRIGHT file distributed with this work for additional
@@ -96,7 +98,7 @@ if ($use_rndc) {
 		stop_rndc($name, $rndc_port);
 	}
 
-	@ns = wait_for_servers(30, @ns);
+	@ns = wait_for_servers(120, @ns);
 }
 
 # Pass 2: SIGTERM
@@ -104,13 +106,13 @@ foreach my $name (@ns) {
 	stop_signal($name, "TERM");
 }
 
-@ns = wait_for_servers(60, @ns);
+@ns = wait_for_servers(300, @ns);
 
 foreach my $name(@ans) {
 	stop_signal($name, "TERM", 1);
 }
 
-@ans = wait_for_servers(1200, @ans);
+@ans = wait_for_servers(300, @ans);
 
 # Pass 3: SIGABRT
 foreach my $name (@ns) {
@@ -127,18 +129,6 @@ foreach my $name (@ans) {
 exit($errors);
 
 # Subroutines
-
-# Return the full path to a given server's lock file.
-sub server_lock_file {
-	my ( $server ) = @_;
-
-	return if (defined($ENV{'CYGWIN'}));
-
-	return $testdir . "/" . $server . "/named.lock" if ($server =~ /^ns/);
-	return if ($server =~ /^ans/);
-
-	die "Unknown server type $server\n";
-}
 
 # Return the full path to a given server's PID file.
 sub server_pid_file {
@@ -182,16 +172,20 @@ sub stop_rndc {
 	}
 
 	my $ip = "10.53.0.$n";
+	if (-e "$testdir/$server/named.ipv6-only") {
+		$ip = "fd92:7065:b8e:ffff::$n";
+	}
+
 	my $how = $halt ? "halt" : "stop";
 
 	# Ugly, but should work.
-	system("$RNDC -c ../common/rndc.conf -s $ip -p $port $how | sed 's/^/I:$test:$server /'");
+	system("$RNDC -c ../_common/rndc.conf -s $ip -p $port $how | sed 's/^/I:$test:$server /'");
 	return;
 }
 
 sub server_died {
 	my ( $server, $signal ) = @_;
-	
+
 	print "I:$test:$server died before a SIG$signal was sent\n";
 	$errors = 1;
 
@@ -210,13 +204,7 @@ sub send_signal {
 
 	my $result = 0;
 
-	if (!$ans && ($^O eq 'cygwin' || $^O eq 'msys')) {
-		my $killout = `/bin/kill -f -$signal $pid 2>&1`;
-		chomp($killout);
-		$result = 1 if ($killout eq '');
-	} else {
-		$result = kill $signal, $pid;
-	}
+	$result = kill $signal, $pid;
 	return $result;
 }
 
@@ -251,23 +239,10 @@ sub pid_file_exists {
 
 	# If we're here, the PID file hasn't been cleaned up yet
 	if (send_signal(0, $pid) == 0) {
-		# XXX: on windows this is likely to result in a
-		# false positive, so don't bother reporting the error.
-		if (!defined($ENV{'CYGWIN'})) {
-			print "I:$test:$server crashed on shutdown\n";
-			$errors = 1;
-		}
+		print "I:$test:$server crashed on shutdown\n";
+		$errors = 1;
 		return;
 	}
-
-	return $server;
-}
-
-sub lock_file_exists {
-	my ( $server ) = @_;
-	my $lock_file = server_lock_file($server);
-
-	return unless defined($lock_file) && -f $lock_file;
 
 	return $server;
 }
@@ -279,7 +254,7 @@ sub wait_for_servers {
 		sleep 1 if (@servers > 0);
 		@servers =
 			grep { defined($_) }
-			map  { pid_file_exists($_) || lock_file_exists($_) } @servers;
+			map  { pid_file_exists($_) } @servers;
 		$timeout--;
 	}
 

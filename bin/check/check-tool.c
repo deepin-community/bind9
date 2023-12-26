@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -12,6 +14,7 @@
 /*! \file */
 
 #include <inttypes.h>
+#include <netdb.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -19,8 +22,6 @@
 #include <isc/log.h>
 #include <isc/mem.h>
 #include <isc/net.h>
-#include <isc/netdb.h>
-#include <isc/print.h>
 #include <isc/region.h>
 #include <isc/result.h>
 #include <isc/stdio.h>
@@ -92,7 +93,7 @@ dns_zoneopt_t zone_options = DNS_ZONEOPT_CHECKNS | DNS_ZONEOPT_CHECKMX |
 #if CHECK_SIBLING
 			     DNS_ZONEOPT_CHECKSIBLING |
 #endif /* if CHECK_SIBLING */
-			     DNS_ZONEOPT_CHECKWILDCARD |
+			     DNS_ZONEOPT_CHECKSVCB | DNS_ZONEOPT_CHECKWILDCARD |
 			     DNS_ZONEOPT_WARNMXCNAME | DNS_ZONEOPT_WARNSRVCNAME;
 
 /*
@@ -203,7 +204,8 @@ checkns(dns_zone_t *zone, const dns_name_t *name, const dns_name_t *owner,
 		 */
 		cur = ai;
 		while (cur != NULL && cur->ai_canonname == NULL &&
-		       cur->ai_next != NULL) {
+		       cur->ai_next != NULL)
+		{
 			cur = cur->ai_next;
 		}
 		if (cur != NULL && cur->ai_canonname != NULL &&
@@ -405,7 +407,8 @@ checkmx(dns_zone_t *zone, const dns_name_t *name, const dns_name_t *owner) {
 		 */
 		cur = ai;
 		while (cur != NULL && cur->ai_canonname == NULL &&
-		       cur->ai_next != NULL) {
+		       cur->ai_next != NULL)
+		{
 			cur = cur->ai_next;
 		}
 		if (cur != NULL && cur->ai_canonname != NULL &&
@@ -491,7 +494,8 @@ checksrv(dns_zone_t *zone, const dns_name_t *name, const dns_name_t *owner) {
 		 */
 		cur = ai;
 		while (cur != NULL && cur->ai_canonname == NULL &&
-		       cur->ai_next != NULL) {
+		       cur->ai_next != NULL)
+		{
 			cur = cur->ai_next;
 		}
 		if (cur != NULL && cur->ai_canonname != NULL &&
@@ -591,7 +595,7 @@ load_zone(isc_mem_t *mctx, const char *zonename, const char *filename,
 			zonename, filename, classname);
 	}
 
-	CHECK(dns_zone_create(&zone, mctx));
+	dns_zone_create(&zone, mctx, 0);
 
 	dns_zone_settype(zone, dns_zone_primary);
 
@@ -612,7 +616,7 @@ load_zone(isc_mem_t *mctx, const char *zonename, const char *filename,
 		CHECK(dns_zone_setjournal(zone, journal));
 	}
 
-	DE_CONST(classname, region.base);
+	region.base = UNCONST(classname);
 	region.length = strlen(classname);
 	CHECK(dns_rdataclass_fromtext(&rdclass, &region));
 

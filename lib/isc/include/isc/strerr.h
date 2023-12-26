@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -24,4 +26,8 @@
 #if defined(strerror_r)
 #undef strerror_r
 #endif /* if defined(strerror_r) */
+
+/*
+ * Ensure we use a consistent implementation of strerror_r()
+ */
 #define strerror_r isc_string_strerror_r

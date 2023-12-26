@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef DNS_DIFF_H
-#define DNS_DIFF_H 1
+#pragma once
 
 /*****
 ***** Module Info
@@ -73,7 +74,7 @@ typedef ISC_LIST(dns_difftuple_t) dns_difftuplelist_t;
 
 struct dns_difftuple {
 	unsigned int magic;
-	isc_mem_t *  mctx;
+	isc_mem_t   *mctx;
 	dns_diffop_t op;
 	dns_name_t   name;
 	dns_ttl_t    ttl;
@@ -94,7 +95,7 @@ typedef struct dns_diff dns_diff_t;
 
 struct dns_diff {
 	unsigned int	    magic;
-	isc_mem_t *	    mctx;
+	isc_mem_t	   *mctx;
 	dns_difftuplelist_t tuples;
 };
 
@@ -236,8 +237,8 @@ dns_diff_applysilently(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver);
  *
  * Requires:
  *\li	*diff is a valid diff (possibly empty), containing
- *   	tuples of type #DNS_DIFFOP_ADD and/or
- *  	For #DNS_DIFFOP_DEL tuples, the TTL is ignored.
+ *	tuples of type #DNS_DIFFOP_ADD and/or
+ *	For #DNS_DIFFOP_DEL tuples, the TTL is ignored.
  *
  */
 
@@ -250,8 +251,8 @@ dns_diff_load(dns_diff_t *diff, dns_addrdatasetfunc_t addfunc,
  * database transaction mechanisms.
  *
  * Requires:
- *\li 	'addfunc' is a valid dns_addradatasetfunc_t obtained from
- * 	dns_db_beginload()
+ *\li	'addfunc' is a valid dns_addradatasetfunc_t obtained from
+ *	dns_db_beginload()
  *
  *\li	'add_private' points to a corresponding dns_dbload_t *
  *      (XXX why is it a void pointer, then?)
@@ -276,5 +277,3 @@ dns_diff_print(dns_diff_t *diff, FILE *file);
  */
 
 ISC_LANG_ENDDECLS
-
-#endif /* DNS_DIFF_H */
