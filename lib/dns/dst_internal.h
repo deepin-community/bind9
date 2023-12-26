@@ -1,5 +1,7 @@
 /*
- * Portions Copyright (C) Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
+ *
+ * SPDX-License-Identifier: MPL-2.0 AND ISC
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,7 +9,9 @@
  *
  * See the COPYRIGHT file distributed with this work for additional
  * information regarding copyright ownership.
- *
+ */
+
+/*
  * Portions Copyright (C) Network Associates, Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -28,7 +32,6 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-#include <openssl/dh.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/objects.h>
@@ -93,9 +96,11 @@ struct dst_key {
 	union {
 		void *generic;
 		dns_gss_ctx_id_t gssctx;
-		DH *dh;
-		EVP_PKEY *pkey;
 		dst_hmac_key_t *hmac_key;
+		struct {
+			EVP_PKEY *pub;
+			EVP_PKEY *priv;
+		} pkeypair;
 	} keydata; /*%< pointer to key in crypto pkg fmt */
 
 	isc_stdtime_t times[DST_MAX_TIMES + 1]; /*%< timing metadata */
@@ -118,6 +123,7 @@ struct dst_key {
 	bool inactive; /*%< private key not present as it is
 			* inactive */
 	bool external; /*%< external key */
+	bool modified; /*%< set to true if key file metadata has changed */
 
 	int fmt_major; /*%< private key format, major version
 			* */
@@ -204,14 +210,12 @@ dst__hmacsha384_init(struct dst_func **funcp);
 isc_result_t
 dst__hmacsha512_init(struct dst_func **funcp);
 isc_result_t
-dst__openssldh_init(struct dst_func **funcp);
-isc_result_t
 dst__opensslrsa_init(struct dst_func **funcp, unsigned char algorithm);
 isc_result_t
 dst__opensslecdsa_init(struct dst_func **funcp);
 #if HAVE_OPENSSL_ED25519 || HAVE_OPENSSL_ED448
 isc_result_t
-dst__openssleddsa_init(struct dst_func **funcp);
+dst__openssleddsa_init(struct dst_func **funcp, unsigned char algorithm);
 #endif /* HAVE_OPENSSL_ED25519 || HAVE_OPENSSL_ED448 */
 #if HAVE_GSSAPI
 isc_result_t
@@ -233,6 +237,16 @@ void
 dst__mem_free(void *ptr);
 void *
 dst__mem_realloc(void *ptr, size_t size);
+
+/*%
+ * Secure private file handling
+ */
+FILE *
+dst_key_open(char *tmpname, mode_t mode);
+isc_result_t
+dst_key_close(char *tmpname, FILE *fp, char *filename);
+isc_result_t
+dst_key_cleanup(char *tmpname, FILE *fp);
 
 ISC_LANG_ENDDECLS
 

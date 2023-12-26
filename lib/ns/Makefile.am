@@ -1,7 +1,7 @@
 include $(top_srcdir)/Makefile.top
 
 AM_CPPFLAGS +=				\
-	-DNAMED_PLUGINDIR=\"$(libdir)/named\"
+	-DNAMED_PLUGINDIR=\"$(pkglibdir)\"
 
 lib_LTLIBRARIES = libns.la
 
@@ -9,7 +9,6 @@ libns_ladir = $(includedir)/ns
 
 libns_la_HEADERS =			\
 	include/ns/client.h		\
-	include/ns/events.h		\
 	include/ns/hooks.h		\
 	include/ns/interfacemgr.h	\
 	include/ns/listenlist.h		\
@@ -31,6 +30,7 @@ libns_la_SOURCES =		\
 	listenlist.c		\
 	log.c			\
 	notify.c		\
+	probes.d		\
 	query.c			\
 	server.c		\
 	sortlist.c		\
@@ -56,6 +56,11 @@ libns_la_LDFLAGS =		\
 	$(AM_LDFLAGS)		\
 	-release "$(PACKAGE_VERSION)"
 
-if HAVE_CMOCKA
-SUBDIRS = tests
+if !HAVE_SYSTEMTAP
+DTRACE_DEPS = libns_la-query.lo
+DTRACE_OBJS = .libs/libns_la-query.$(OBJEXT)
 endif
+
+include $(top_srcdir)/Makefile.dtrace
+
+libns_la_LIBADD += $(DTRACE_LIBADD)

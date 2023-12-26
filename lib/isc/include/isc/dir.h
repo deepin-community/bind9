@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -15,11 +17,10 @@
 
 #include <dirent.h>
 #include <limits.h>
+#include <sys/types.h> /* Required on some systems. */
 
 #include <isc/lang.h>
 #include <isc/result.h>
-
-#include <sys/types.h> /* Required on some systems. */
 
 #ifndef NAME_MAX
 #define NAME_MAX 256
@@ -40,7 +41,7 @@ typedef struct isc_dir {
 	unsigned int   magic;
 	char	       dirname[PATH_MAX];
 	isc_direntry_t entry;
-	DIR *	       handle;
+	DIR	      *handle;
 } isc_dir_t;
 
 ISC_LANG_BEGINDECLS
@@ -65,14 +66,5 @@ isc_dir_chdir(const char *dirname);
 
 isc_result_t
 isc_dir_chroot(const char *dirname);
-
-isc_result_t
-isc_dir_createunique(char *templet);
-/*!<
- * Use a templet (such as from isc_file_mktemplate()) to create a uniquely
- * named, empty directory.  The templet string is modified in place.
- * If result == ISC_R_SUCCESS, it is the name of the directory that was
- * created.
- */
 
 ISC_LANG_ENDDECLS

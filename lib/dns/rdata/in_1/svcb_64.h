@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef IN_1_SVCB_64_H
-#define IN_1_SVCB_64_H 1
+#pragma once
 
 /*!
  *  \brief Per draft-ietf-dnsop-svcb-https-02
@@ -34,5 +35,3 @@ dns_rdata_in_svcb_next(dns_rdata_in_svcb_t *);
 
 void
 dns_rdata_in_svcb_current(dns_rdata_in_svcb_t *, isc_region_t *);
-
-#endif /* IN_1_SVCB_64_H */

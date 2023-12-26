@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -28,7 +30,6 @@
 #include <isc/file.h>
 #include <isc/mem.h>
 #include <isc/net.h>
-#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/string.h>
 #include <isc/time.h>
@@ -52,7 +53,7 @@ const char *progname;
 static enum { progmode_keygen, progmode_confgen } progmode;
 bool verbose = false; /* needed by util.c but not used here */
 
-ISC_NORETURN static void
+noreturn static void
 usage(int status);
 
 static void
@@ -119,14 +120,14 @@ main(int argc, char **argv) {
 	} else if (PROGCMP("ddns-confgen")) {
 		progmode = progmode_confgen;
 	} else {
-		INSIST(0);
-		ISC_UNREACHABLE();
+		UNREACHABLE();
 	}
 
 	isc_commandline_errprint = false;
 
 	while ((ch = isc_commandline_parse(argc, argv, "a:hk:Mmr:qs:y:z:")) !=
-	       -1) {
+	       -1)
+	{
 		switch (ch) {
 		case 'a':
 			algname = isc_commandline_argument;
@@ -207,7 +208,7 @@ main(int argc, char **argv) {
 	}
 
 	/* Use canonical algorithm name */
-	algname = alg_totext(alg);
+	algname = dst_hmac_algorithm_totext(alg);
 
 	isc_mem_create(&mctx);
 

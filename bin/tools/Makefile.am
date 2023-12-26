@@ -18,16 +18,6 @@ bin_PROGRAMS =			\
 arpaname_LDADD =		\
 	$(LIBISC_LIBS)
 
-mdig_CPPFLAGS =			\
-	$(AM_CPPFLAGS)		\
-	$(LIBBIND9_CFLAGS)
-
-mdig_LDADD =			\
-	$(LIBBIND9_LIBS)	\
-	$(LIBISCCFG_LIBS)	\
-	$(LIBDNS_LIBS)		\
-	$(LIBISC_LIBS)
-
 if HAVE_DNSTAP
 bin_PROGRAMS +=			\
 	dnstap-read
@@ -47,7 +37,7 @@ if HAVE_LMDB
 bin_PROGRAMS +=			\
 	named-nzd2nzf
 
-named_nzd2nzf_CFLAGS =		\
+named_nzd2nzf_CPPFLAGS =		\
 	$(AM_CPPFLAGS)		\
 	$(LMDB_CFLAGS)
 

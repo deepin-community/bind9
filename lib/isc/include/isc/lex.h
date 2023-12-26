@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
+ * SPDX-License-Identifier: MPL-2.0
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at https://mozilla.org/MPL/2.0/.
@@ -9,8 +11,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef ISC_LEX_H
-#define ISC_LEX_H 1
+#pragma once
 
 /*****
 ***** Module Info
@@ -129,7 +130,7 @@ typedef union {
 	unsigned long	 as_ulong;
 	isc_region_t	 as_region;
 	isc_textregion_t as_textregion;
-	void *		 as_pointer;
+	void		*as_pointer;
 } isc_tokenvalue_t;
 
 typedef struct isc_token {
@@ -141,7 +142,7 @@ typedef struct isc_token {
  *** Functions
  ***/
 
-isc_result_t
+void
 isc_lex_create(isc_mem_t *mctx, size_t max_token, isc_lex_t **lexp);
 /*%<
  * Create a lexer.
@@ -441,5 +442,3 @@ isc_lex_isfile(isc_lex_t *lex);
  */
 
 ISC_LANG_ENDDECLS
-
-#endif /* ISC_LEX_H */
