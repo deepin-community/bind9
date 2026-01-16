@@ -89,6 +89,10 @@ for good in good-*.conf; do
       good-proxy-*doh*.conf) continue ;;
       bad-proxy-*doh*.conf) continue ;;
     esac
+  elif ! $FEATURETEST --have-openssl-cipher-suites; then
+    case $good in
+      good-tls-cipher-suites-*.conf) continue ;;
+    esac
   fi
   {
     $CHECKCONF $good >checkconf.out$n 2>&1
@@ -161,6 +165,12 @@ warnings=$(grep "'notify' is disabled" <checkconf.out$n | wc -l)
 if [ $ret -ne 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
+if grep "^#define DNS_RDATASET_FIXED" "$TOP_BUILDDIR/config.h" >/dev/null 2>&1; then
+  test_fixed=true
+else
+  test_fixed=false
+fi
+
 n=$((n + 1))
 echo_i "checking named-checkconf deprecate warnings ($n)"
 ret=0
@@ -175,12 +185,18 @@ grep "option 'avoid-v6-udp-ports' is deprecated" <checkconf.out$n.1 >/dev/null |
 grep "option 'dialup' is deprecated" <checkconf.out$n.1 >/dev/null || ret=1
 grep "option 'heartbeat-interval' is deprecated" <checkconf.out$n.1 >/dev/null || ret=1
 grep "option 'dnssec-must-be-secure' is deprecated" <checkconf.out$n.1 >/dev/null || ret=1
+grep "option 'sortlist' is deprecated" <checkconf.out$n.1 >/dev/null || ret=1
 grep "token 'port' is deprecated" <checkconf.out$n.1 >/dev/null || ret=1
+if $test_fixed; then
+  grep "rrset-order: order 'fixed' is deprecated" <checkconf.out$n.1 >/dev/null || ret=1
+else
+  grep "rrset-order: order 'fixed' was disabled at compilation time" <checkconf.out$n.1 >/dev/null || ret=1
+fi
 if [ $ret -ne 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 # set -i to ignore deprecate warnings
-$CHECKCONF -i deprecated.conf >checkconf.out$n.2 2>&1
-grep '.*' <checkconf.out$n.2 >/dev/null && ret=1
+$CHECKCONF -i deprecated.conf 2>&1 | grep_v "rrset-order: order 'fixed' was disabled at compilation time" >checkconf.out$n.2
+grep '^.+$' <checkconf.out$n.2 >/dev/null && ret=1
 if [ $ret -ne 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
@@ -296,20 +312,32 @@ n=$((n + 1))
 echo_i "checking for missing key directory warning ($n)"
 ret=0
 rm -rf test.keydir
+rm -rf test.keystoredir
 $CHECKCONF warn-keydir.conf >checkconf.out$n.1 2>&1
 l=$(grep "'test.keydir' does not exist" <checkconf.out$n.1 | wc -l)
 [ $l -eq 1 ] || ret=1
+l=$(grep "'test.keystoredir' does not exist" <checkconf.out$n.1 | wc -l)
+[ $l -eq 1 ] || ret=1
 touch test.keydir
+touch test.keystoredir
 $CHECKCONF warn-keydir.conf >checkconf.out$n.2 2>&1
 l=$(grep "'test.keydir' is not a directory" <checkconf.out$n.2 | wc -l)
 [ $l -eq 1 ] || ret=1
+l=$(grep "'test.keystoredir' is not a directory" <checkconf.out$n.2 | wc -l)
+[ $l -eq 1 ] || ret=1
 rm -f test.keydir
+rm -f test.keystoredir
 mkdir test.keydir
+mkdir test.keystoredir
 $CHECKCONF warn-keydir.conf >checkconf.out$n.3 2>&1
 l=$(grep "key-directory" <checkconf.out$n.3 | wc -l)
 [ $l -eq 0 ] || ret=1
+l=$(grep "key-store directory" <checkconf.out$n.3 | wc -l)
+[ $l -eq 0 ] || ret=1
 rm -rf test.keydir
+rm -rf test.keystoredir
 if [ $ret -ne 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
 
 n=$((n + 1))
 echo_i "checking that named-checkconf -z catches conflicting ttl with max-ttl ($n)"
@@ -614,12 +642,12 @@ status=$((status + ret))
 n=$((n + 1))
 echo_i "checking named-checkconf kasp nsec3 iterations errors ($n)"
 ret=0
-if ! ($SHELL ../testcrypto.sh -q RSASHA1); then
+if [ $RSASHA1_SUPPORTED = 0 ]; then
   conf=kasp-bad-nsec3-iter-fips.conf
   expect=2
 else
   conf=kasp-bad-nsec3-iter.conf
-  expect=3
+  expect=5
 fi
 $CHECKCONF $conf >checkconf.out$n 2>&1 && ret=1
 grep "dnssec-policy: nsec3 iterations value 1 not allowed, must be zero" <checkconf.out$n >/dev/null || ret=1
@@ -632,7 +660,7 @@ n=$((n + 1))
 echo_i "checking named-checkconf kasp nsec3 algorithm errors ($n)"
 ret=0
 $CHECKCONF kasp-bad-nsec3-alg.conf >checkconf.out$n 2>&1 && ret=1
-if ! ($SHELL ../testcrypto.sh -q RSASHA1); then
+if [ $RSASHA1_SUPPORTED = 0 ]; then
   grep "dnssec-policy: algorithm rsasha1 not supported" <checkconf.out$n >/dev/null || ret=1
 else
   grep "dnssec-policy: cannot use nsec3 with algorithm 'RSASHA1'" <checkconf.out$n >/dev/null || ret=1
@@ -645,6 +673,14 @@ echo_i "checking named-checkconf kasp key errors ($n)"
 ret=0
 $CHECKCONF kasp-bad-keylen.conf >checkconf.out$n 2>&1 && ret=1
 grep "dnssec-policy: key with algorithm rsasha256 has invalid key length 511" <checkconf.out$n >/dev/null || ret=1
+if [ $ret -ne 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "checking named-checkconf kasp offline-ksk with csk errors ($n)"
+ret=0
+$CHECKCONF kasp-bad-offline-ksk.conf >checkconf.out$n 2>&1 && ret=1
+grep "dnssec-policy: csk keys are not allowed when offline-ksk is enabled" <checkconf.out$n >/dev/null || ret=1
 if [ $ret -ne 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
@@ -687,6 +723,20 @@ grep "dnssec-policy: algorithm 13 has multiple keys with ZSK role" <checkconf.ou
 grep "dnssec-policy: key lifetime is shorter than 30 days" <checkconf.out$n >/dev/null || ret=1
 lines=$(wc -l <"checkconf.out$n")
 if [ $lines -ne 5 ]; then ret=1; fi
+if [ $ret -ne 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "checking named-checkconf kasp deprecated algorithms and digests ($n)"
+ret=0
+if [ $RSASHA1_SUPPORTED = 0 ]; then
+  $CHECKCONF kasp-deprecated-fips.conf >checkconf.out$n 2>&1 || ret=1
+else
+  $CHECKCONF kasp-deprecated.conf >checkconf.out$n 2>&1 || ret=1
+  grep "dnssec-policy: DNSSEC algorithm rsasha1 is deprecated" checkconf.out$n >/dev/null || ret=1
+  grep "dnssec-policy: DNSSEC algorithm nsec3rsasha1 is deprecated" checkconf.out$n >/dev/null || ret=1
+fi
+grep "dnssec-policy: deprecated CDS digest-type sha1" checkconf.out$n >/dev/null || ret=1
 if [ $ret -ne 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 

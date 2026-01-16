@@ -191,7 +191,7 @@ $RNDCCMD 10.53.0.2 stats 2>&1 | sed 's/^/I:ns1 /'
 query_count=$(awk '/QUERY/ {print $1}' ns2/named.stats)
 txt_count=$(awk '/TXT/ {print $1}' ns2/named.stats)
 noerror_count=$(awk '/NOERROR/ {print $1}' ns2/named.stats)
-if [ $PERL_XML ]; then
+if [ "$PERL_XML" ]; then
   file=$($PERL fetch.pl -p ${EXTRAPORT1} xml/v3/server)
   mv $file xml.stats
   $PERL server-xml.pl >xml.fmtstats 2>/dev/null
@@ -205,7 +205,7 @@ if [ $PERL_XML ]; then
   xml_noerror_count=${xml_noerror_count:-0}
   [ "$noerror_count" -eq "$xml_noerror_count" ] || ret=1
 fi
-if [ $PERL_JSON ]; then
+if [ "$PERL_JSON" ]; then
   file=$($PERL fetch.pl -p ${EXTRAPORT1} json/v1/server)
   mv $file json.stats
   $PERL server-json.pl >json.fmtstats 2>/dev/null
@@ -225,14 +225,14 @@ n=$((n + 1))
 
 ret=0
 echo_i "checking malloced memory statistics xml/json ($n)"
-if [ $PERL_XML ]; then
+if [ "$PERL_XML" ]; then
   file=$($PERL fetch.pl -p ${EXTRAPORT1} xml/v3/mem)
   mv $file xml.mem
   $PERL mem-xml.pl $file >xml.fmtmem
   grep "'InUse' => '[0-9][0-9]*'" xml.fmtmem >/dev/null || ret=1
   grep "'inuse' => '[0-9][0-9]*'" xml.fmtmem >/dev/null || ret=1
 fi
-if [ $PERL_JSON ]; then
+if [ "$PERL_JSON" ]; then
   file=$($PERL fetch.pl -p ${EXTRAPORT1} json/v1/mem)
   mv $file json.mem
   grep '"inuse":[0-9][0-9]*,' json.mem >/dev/null || ret=1
@@ -309,11 +309,11 @@ cat zones.expect | sort >zones.expect.$n
 rm -f zones.expect
 # Fetch and check the dnssec sign statistics.
 echo_i "fetching zone '$zone' stats data after zone maintenance at startup ($n)"
-if [ $PERL_XML ]; then
+if [ "$PERL_XML" ]; then
   getzones xml $zone x$n || ret=1
   cmp zones.out.x$n zones.expect.$n || ret=1
 fi
-if [ $PERL_JSON ]; then
+if [ "$PERL_JSON" ]; then
   getzones json 0 j$n || ret=1
   cmp zones.out.j$n zones.expect.$n || ret=1
 fi
@@ -339,11 +339,11 @@ cat zones.expect | sort >zones.expect.$n
 rm -f zones.expect
 # Fetch and check the dnssec sign statistics.
 echo_i "fetching zone '$zone' stats data after dynamic update ($n)"
-if [ $PERL_XML ]; then
+if [ "$PERL_XML" ]; then
   getzones xml $zone x$n || ret=1
   cmp zones.out.x$n zones.expect.$n || ret=1
 fi
-if [ $PERL_JSON ]; then
+if [ "$PERL_JSON" ]; then
   getzones json 0 j$n || ret=1
   cmp zones.out.j$n zones.expect.$n || ret=1
 fi
@@ -371,11 +371,11 @@ echo "${sign_prefix} ${ksk_id}: 2" >>zones.expect
 cat zones.expect | sort >zones.expect.$n
 rm -f zones.expect
 # Fetch and check the dnssec sign statistics.
-if [ $PERL_XML ]; then
+if [ "$PERL_XML" ]; then
   getzones xml $zone x$n || ret=1
   cmp zones.out.x$n zones.expect.$n || ret=1
 fi
-if [ $PERL_JSON ]; then
+if [ "$PERL_JSON" ]; then
   getzones json 0 j$n || ret=1
   cmp zones.out.j$n zones.expect.$n || ret=1
 fi
@@ -412,11 +412,11 @@ cat zones.expect | sort >zones.expect.$n
 rm -f zones.expect
 # Fetch and check the dnssec sign statistics.
 echo_i "fetching zone '$zone' stats data after zone maintenance at startup ($n)"
-if [ $PERL_XML ]; then
+if [ "$PERL_XML" ]; then
   getzones xml $zone x$n || ret=1
   cmp zones.out.x$n zones.expect.$n || ret=1
 fi
-if [ $PERL_JSON ]; then
+if [ "$PERL_JSON" ]; then
   getzones json 2 j$n || ret=1
   cmp zones.out.j$n zones.expect.$n || ret=1
 fi
@@ -450,11 +450,11 @@ cat zones.expect | sort >zones.expect.$n
 rm -f zones.expect
 # Fetch and check the dnssec sign statistics.
 echo_i "fetching zone '$zone' stats data after dynamic update ($n)"
-if [ $PERL_XML ]; then
+if [ "$PERL_XML" ]; then
   getzones xml $zone x$n || ret=1
   cmp zones.out.x$n zones.expect.$n || ret=1
 fi
-if [ $PERL_JSON ]; then
+if [ "$PERL_JSON" ]; then
   getzones json 2 j$n || ret=1
   cmp zones.out.j$n zones.expect.$n || ret=1
 fi
@@ -479,11 +479,11 @@ cat zones.expect | sort >zones.expect.$n
 rm -f zones.expect
 # Fetch and check the dnssec sign statistics.
 echo_i "fetching zone '$zone' stats data after dnssec-policy change ($n)"
-if [ $PERL_XML ]; then
+if [ "$PERL_XML" ]; then
   getzones xml $zone x$n || ret=1
   cmp zones.out.x$n zones.expect.$n || ret=1
 fi
-if [ $PERL_JSON ]; then
+if [ "$PERL_JSON" ]; then
   getzones json 2 j$n || ret=1
   cmp zones.out.j$n zones.expect.$n || ret=1
 fi
@@ -635,7 +635,8 @@ i=0
 if [ -x "${CURL_NEXT}" ]; then
   # build input stream.
   printf 'X-Bloat: ' >header.in$n
-  while test $i -lt 5000; do
+  # curl 8.13 and newer rejects to read line larger than 100KB
+  while test $i -lt 1023; do
     printf '%s' "VGhlIG1vc3QgY29tbW9uIHJlYXNvbiBmb3IgYmxvYXRpbmcgaXMgaGF2aW5nIGEgbG90IG9mIGdhcyBpbiB5b3VyIGd1dC4gCg==" >>header.in$n
     i=$((i + 1))
   done
@@ -689,7 +690,14 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 n=$((n + 1))
 
-echo_i "Retransfering 'example' from ns1 to ns3 in slow mode ($n)"
+echo_i "Checking that there are no 'first refresh' zones in ns3 ($n)"
+ret=0
+$RNDCCMD 10.53.0.3 status | grep -E '^xfers first refresh: 0$' >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+n=$((n + 1))
+
+echo_i "Transfering zones from ns1 to ns3 in slow mode ($n)"
 ret=0
 i=0
 # Restart ns1 with '-T transferslowly' to see the xfrins information in ns3's statschannel while it's ongoing
@@ -700,19 +708,47 @@ nextpart ns3/named.run >/dev/null
 $RNDCCMD 10.53.0.3 retransfer example | sed "s/^/ns3 /" | cat_i
 $RNDCCMD 10.53.0.3 retransfer example-tcp | sed "s/^/ns3 /" | cat_i
 $RNDCCMD 10.53.0.3 retransfer example-tls | sed "s/^/ns3 /" | cat_i
+$RNDCCMD 10.53.0.3 addzone 'example-new { type secondary; primaries { 10.53.0.1; }; file "example-new.db"; };' 2>&1 | sed "s/^/ns3 /" | cat_i
 wait_for_log_fast 200 "zone example/IN: Transfer started" ns3/named.run || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 n=$((n + 1))
 
 _wait_for_transfers() {
-  getxfrins xml x$n || return 1
-  getxfrins json j$n || return 1
-  # XML is encoded in one line, use awk to separate each transfer with a newline
-  count=$(awk '{ gsub("<xfrin ", "\n<xfrin ") } 1' xfrins.xml.x$n | grep -c -E '<state>(Zone Transfer Request|First Data|Receiving AXFR Data)</state>')
-  if [ $count != 3 ]; then return 1; fi
-  count=$(grep -c -E '"state":"(Zone Transfer Request|First Data|Receiving AXFR Data)"' xfrins.json.j$n)
-  if [ $count != 3 ]; then return 1; fi
+  if [ "$PERL_XML" ]; then
+    getxfrins xml x$n || return 1
+
+    # XML is encoded in one line, use awk to separate each transfer
+    # with a newline
+
+    # We expect 4 transfers
+    count=$(awk '{ gsub("<xfrin ", "\n<xfrin ") } 1' xfrins.xml.x$n | grep -c -E '<state>(Zone Transfer Request|First Data|Receiving AXFR Data)</state>')
+    if [ $count != 4 ]; then return 1; fi
+
+    # We expect 3 of 4 to be retransfers
+    count=$(awk '{ gsub("<xfrin ", "\n<xfrin ") } 1' xfrins.xml.x$n | grep -c -F '<firstrefresh>No</firstrefresh>')
+    if [ $count != 3 ]; then return 1; fi
+
+    # We expect 1 of 4 to be a new transfer
+    count=$(awk '{ gsub("<xfrin ", "\n<xfrin ") } 1' xfrins.xml.x$n | grep -c -F '<firstrefresh>Yes</firstrefresh>')
+    if [ $count != 1 ]; then return 1; fi
+  fi
+
+  if [ "$PERL_JSON" ]; then
+    getxfrins json j$n || return 1
+
+    # We expect 4 transfers
+    count=$(grep -c -E '"state":"(Zone Transfer Request|First Data|Receiving AXFR Data)"' xfrins.json.j$n)
+    if [ $count != 4 ]; then return 1; fi
+
+    # We expect 3 of 4 to be retransfers
+    count=$(grep -c -F '"firstrefresh":"No"' xfrins.json.j$n)
+    if [ $count != 3 ]; then return 1; fi
+
+    # We expect 1 of 4 to be a new transfer
+    count=$(grep -c -F '"firstrefresh":"Yes"' xfrins.json.j$n)
+    if [ $count != 1 ]; then return 1; fi
+  fi
 }
 
 # We have now less than one second to catch the zone transfers in progress
@@ -723,10 +759,17 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 n=$((n + 1))
 
-if [ $PERL_JSON ]; then
+echo_i "Checking that there is one 'first refresh' zone in ns3 ($n)"
+ret=0
+$RNDCCMD 10.53.0.3 status | grep -E '^xfers first refresh: 1$' >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+n=$((n + 1))
+
+if [ "$PERL_JSON" ]; then
   echo_i "Checking zone transfer transports ($n)"
   ret=0
-  cp xfrins.json.j$((n - 1)) xfrins.json.j$n
+  cp xfrins.json.j$((n - 2)) xfrins.json.j$n
   $PERL xfrins-json.pl xfrins.json.j$n example >xfrins.example.format$n
   echo "soatransport: UDP" >xfrins.example.expect$n
   echo "transport: TCP" >>xfrins.example.expect$n

@@ -43,6 +43,60 @@ grep "status: NOERROR" dig.out.ns1.test${n} >/dev/null || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
+rndccmd 10.53.0.1 stats || ret=1 # Get the responses, RTT and timeout statistics before the following timeout tests
+grep -F 'responses received' ns1/named.stats >ns1/named.stats.responses-before || true
+grep -F 'queries with RTT' ns1/named.stats >ns1/named.stats.rtt-before || true
+mv ns1/named.stats ns1/named.stats-before
+
+# 'resolver-query-timeout' is set to 5 seconds in ns1, so dig with a lower
+# timeout value should give up earlier than that.
+n=$((n + 1))
+echo_i "checking no response handling with a shorter than resolver-query-timeout timeout ($n)"
+ret=0
+dig_with_opts +tcp +tries=1 +timeout=3 noresponse.example.net @10.53.0.1 a >dig.out.ns1.test${n} && ret=1
+grep -F "no servers could be reached" dig.out.ns1.test${n} >/dev/null || ret=1
+grep -F "EDE: 22 (No Reachable Authority)" dig.out.ns1.test${n} >/dev/null && ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+# 'resolver-query-timeout' is set to 5 seconds in ns1, which is lower than the
+# current single query timeout value MAX_SINGLE_QUERY_TIMEOUT of 9 seconds, so
+# the "hung fetch" timer should kick in, interrupt the non-responsive query and
+# send a SERVFAIL answer.
+n=$((n + 1))
+echo_i "checking no response handling with a longer than resolver-query-timeout timeout ($n)"
+ret=0
+dig_with_opts +tcp +tries=1 +timeout=7 noresponse.example.net @10.53.0.1 a >dig.out.ns1.test${n} || ret=1
+grep -F "status: SERVFAIL" dig.out.ns1.test${n} >/dev/null || ret=1
+grep -F "EDE: 22 (No Reachable Authority)" dig.out.ns1.test${n} >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "checking that the timeout didn't skew the resolver responses counters ($n)"
+ret=0
+rndccmd 10.53.0.1 stats || ret=1
+grep -F 'responses received' ns1/named.stats >ns1/named.stats.responses-after || true
+grep -F 'queries with RTT' ns1/named.stats >ns1/named.stats.rtt-after || true
+mv ns1/named.stats ns1/named.stats-after
+diff ns1/named.stats.responses-before ns1/named.stats.responses-after >/dev/null || ret=1
+diff ns1/named.stats.rtt-before ns1/named.stats.rtt-after >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+# 'resolver-query-timeout' is set to 5 seconds in ns1, so named should
+# interrupt the non-responsive query and send a SERVFAIL answer before dig's
+# own timeout fires, which is set to 7 seconds. This time, exampleudp.net is
+# contacted using UDP transport by the resolver.
+n=$((n + 1))
+echo_i "checking no response handling with a longer than resolver-query-timeout timeout (UDP recursion) ($n)"
+ret=0
+dig_with_opts +tcp +tries=1 +timeout=7 noresponse.exampleudp.net @10.53.0.1 a >dig.out.ns1.test${n} || ret=1
+grep -F "status: SERVFAIL" dig.out.ns1.test${n} >/dev/null || ret=1
+grep -F "EDE: 22 (No Reachable Authority)" dig.out.ns1.test${n} >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
 n=$((n + 1))
 echo_i "checking handling of bogus referrals ($n)"
 # If the server has the "INSIST(!external)" bug, this query will kill it.
@@ -121,6 +175,17 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
 n=$((n + 1))
+echo_i "checking long CNAME chain target filtering (deny) ($n)"
+ret=0
+dig_with_opts +tcp longcname1.example.net @10.53.0.1 a >dig.out.ns1.test${n} || ret=1
+grep -F "status: SERVFAIL" dig.out.ns1.test${n} >/dev/null || ret=1
+grep -F "max. restarts reached" dig.out.ns1.test${n} >/dev/null || ret=1
+lines=$(grep -F "CNAME" dig.out.ns1.test${n} | wc -l)
+test ${lines:-1} -eq 12 || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
 echo_i "checking DNAME target filtering (deny) ($n)"
 ret=0
 dig_with_opts +tcp foo.baddname.example.net @10.53.0.1 a >dig.out.ns1.test${n} || ret=1
@@ -187,6 +252,10 @@ done
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
+stop_server ns4
+touch ns4/named.noaa
+start_server --noclean --restart --port ${PORT} ns4 || ret=1
+
 n=$((n + 1))
 echo_i "RT21594 regression test check setup ($n)"
 ret=0
@@ -222,6 +291,10 @@ dig_with_opts +tcp noexistent @10.53.0.5 txt >dig.ns5.out.${n} || ret=1
 grep "status: NXDOMAIN" dig.ns5.out.${n} >/dev/null || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
+
+stop_server ns4
+rm ns4/named.noaa
+start_server --noclean --restart --port ${PORT} ns4 || ret=1
 
 n=$((n + 1))
 echo_i "check that replacement of additional data by a negative cache no data entry clears the additional RRSIGs ($n)"
@@ -474,18 +547,18 @@ n=$((n + 1))
 echo_i "check prefetch qtype * (${n})"
 ret=0
 dig_with_opts @10.53.0.5 fetchall.tld any >dig.out.1.${n} || ret=1
-ttl1=$(awk '/"A" "short" "ttl"/ { print $2 - 3 }' dig.out.1.${n})
+ttl1=$(awk '/^fetchall.tld/ { print $2 - 3; exit }' dig.out.1.${n})
 # sleep so we are in prefetch range
 sleep "${ttl1:-0}"
 # trigger prefetch
 dig_with_opts @10.53.0.5 fetchall.tld any >dig.out.2.${n} || ret=1
-ttl2=$(awk '/"A" "short" "ttl"/ { print $2 }' dig.out.2.${n})
+ttl2=$(awk '/^fetchall.tld/ { print $2; exit }' dig.out.2.${n})
 sleep 1
 # check that prefetch occurred;
-# note that only one record is prefetched, which is the TXT record in this case,
+# note that only the first record is prefetched,
 # because of the order of the records in the cache
 dig_with_opts @10.53.0.5 fetchall.tld any >dig.out.3.${n} || ret=1
-ttl3=$(awk '/"A" "short" "ttl"/ { print $2 }' dig.out.3.${n})
+ttl3=$(awk '/^fetchall.tld/ { print $2; exit }' dig.out.3.${n})
 test "${ttl3:-0}" -gt "${ttl2:-1}" || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
@@ -505,9 +578,21 @@ n=$((n + 1))
 echo_i "check that '-t aaaa' in .digrc does not have unexpected side effects ($n)"
 ret=0
 echo "-t aaaa" >.digrc
-(HOME="$(pwd)" dig_with_opts @10.53.0.4 . >dig.out.1.${n}) || ret=1
-(HOME="$(pwd)" dig_with_opts @10.53.0.4 . A >dig.out.2.${n}) || ret=1
-(HOME="$(pwd)" dig_with_opts @10.53.0.4 -x 127.0.0.1 >dig.out.3.${n}) || ret=1
+(
+  HOME="$(pwd)"
+  export HOME
+  dig_with_opts @10.53.0.4 . >dig.out.1.${n}
+) || ret=1
+(
+  HOME="$(pwd)"
+  export HOME
+  dig_with_opts @10.53.0.4 . A >dig.out.2.${n}
+) || ret=1
+(
+  HOME="$(pwd)"
+  export HOME
+  dig_with_opts @10.53.0.4 -x 127.0.0.1 >dig.out.3.${n}
+) || ret=1
 grep ';\..*IN.*AAAA$' dig.out.1.${n} >/dev/null || ret=1
 grep ';\..*IN.*A$' dig.out.2.${n} >/dev/null || ret=1
 grep 'extra type option' dig.out.2.${n} >/dev/null && ret=1
@@ -790,11 +875,6 @@ status=$((status + ret))
 n=$((n + 1))
 echo_i "check that correct namespace is chosen for dual-stack-servers ($n)"
 ret=0
-#
-# The two priming queries are needed until we fix dual-stack-servers fully
-#
-dig_with_opts @fd92:7065:b8e:ffff::9 v4.nameserver A >dig.out.prime1.${n} || ret=1
-dig_with_opts @fd92:7065:b8e:ffff::9 v4.nameserver AAAA >dig.out.prime2.${n} || ret=1
 dig_with_opts @fd92:7065:b8e:ffff::9 foo.v4only.net A >dig.out.ns9.${n} || ret=1
 grep "status: NOERROR" dig.out.ns9.${n} >/dev/null || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
@@ -817,6 +897,7 @@ grep "ANSWER: [12]," dig.out.2.${n} >/dev/null || ret=1
 lines=$(awk '$1 == "mixedttl.tld." && $2 > 30 { print }' dig.out.2.${n} | wc -l)
 test ${lines:-1} -ne 0 && ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
 
 n=$((n + 1))
 echo_i "check resolver behavior when FORMERR for EDNS options happens (${n})"
@@ -828,7 +909,137 @@ dig_with_opts +tcp @10.53.0.5 options-formerr A >dig.out.${n} || ret=1
 grep "status: NOERROR" dig.out.${n} >/dev/null || ret=1
 nextpart ns5/named.run | grep "$msg" >/dev/null || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
 
+n=$((n + 1))
+echo_i "GL#4612 regression test: DS query against broken NODATA responses (${n})"
+# servers ns2 and ns3 return authority SOA which matches QNAME rather than the zone
+ret=0
+dig_with_opts @10.53.0.7 a.a.gl6412 DS >dig.out.${n} || ret=1
+grep "status: SERVFAIL" dig.out.${n} >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that response codes have been logged with 'responselog yes;' ($n)"
+ret=0
+grep "responselog yes;" ns5/named.conf >/dev/null || ret=1
+grep "response: version.bind CH TXT NOERROR" ns5/named.run >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that 'rndc responselog off' disables logging 'responselog yes;' ($n)"
+ret=0
+rndccmd 10.53.0.5 responselog off || ret=1
+dig_with_opts @10.53.0.5 should.not.be.logged >dig.ns5.out.${n} || ret=1
+grep "response: should.not.be.logged" ns5/named.run >/dev/null && ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that 'rndc responselog on' enables logging 'responselog yes;' ($n)"
+ret=0
+grep "response: should.be.logged" ns5/named.run >/dev/null && ret=1
+rndccmd 10.53.0.5 responselog on || ret=1
+dig_with_opts @10.53.0.5 should.be.logged >dig.ns5.out.${n} || ret=1
+grep "response: should.be.logged" ns5/named.run >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that response codes have not been logged with default 'responselog' ($n)"
+ret=0
+grep "responselog" ns1/named.conf >/dev/null && ret=1
+grep "response: version.bind CH TXT NOERROR" ns1/named.run >/dev/null && ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that 'rndc responselog on' enables logging with default 'responselog' ($n)"
+ret=0
+grep "response: should.be.logged" ns1/named.run >/dev/null && ret=1
+rndccmd 10.53.0.1 responselog on || ret=1
+dig_with_opts @10.53.0.1 should.be.logged >dig.ns1.out.${n} || ret=1
+grep "response: should.be.logged" ns1/named.run >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that 'rndc responselog off' disables logging with default 'responselog' ($n)"
+ret=0
+rndccmd 10.53.0.1 responselog off || ret=1
+dig_with_opts @10.53.0.1 should.not.be.logged >dig.ns1.out.${n} || ret=1
+grep "response: should.not.be.logged" ns1/named.run >/dev/null && ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that response codes have not been logged with 'responselog no;' ($n)"
+ret=0
+grep "responselog no;" ns6/named.conf >/dev/null || ret=1
+grep "response: version.bind CH TXT NOERROR" ns6/named.run >/dev/null && ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that 'rndc responselog on' enables logging with default 'responselog no;' ($n)"
+ret=0
+grep "response: should.be.logged" ns6/named.run >/dev/null && ret=1
+rndccmd 10.53.0.6 responselog on || ret=1
+dig_with_opts @10.53.0.6 should.be.logged >dig.ns6.out.${n} || ret=1
+grep "response: should.be.logged" ns6/named.run >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that 'rndc responselog' toggles logging off with default 'responselog no;' ($n)"
+ret=0
+rndccmd 10.53.0.6 responselog || ret=1
+dig_with_opts @10.53.0.6 toggled.should.not.be.logged >dig.ns6.out.${n} || ret=1
+grep "response: toggled.should.not.be.logged" ns6/named.run >/dev/null && ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that 'rndc responselog' toggles logging on with default 'responselog no;' ($n)"
+ret=0
+rndccmd 10.53.0.6 responselog || ret=1
+dig_with_opts @10.53.0.6 toggled.should.be.logged >dig.ns6.out.${n} || ret=1
+grep "response: toggled.should.be.logged" ns6/named.run >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that 'rndc responselog off' disables logging with default 'responselog no;' ($n)"
+ret=0
+rndccmd 10.53.0.6 responselog off || ret=1
+dig_with_opts @10.53.0.6 should.not.be.logged >dig.ns6.out.${n} || ret=1
+grep "response: should.not.be.logged" ns6/named.run >/dev/null && ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check that attach-cache with arbitrary cache name is preserved across reload ($n)"
+ret=0
+# send a query, wait a second, reload the configuration, and query again.
+# the TTL should indicate that the cache was still populated.
+dig_with_opts +noall +answer @10.53.0.1 www.example.org >/dev/null || ret=1
+sleep 1
+rndc_reload ns1 10.53.0.1
+dig_with_opts +noall +answer @10.53.0.1 www.example.org >dig.ns1.out.${n} || ret=1
+ttl=$(awk '{print $2}' dig.ns1.out.${n})
+[ $ttl -lt 300 ] || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "client requests recursion but it is disabled - expect EDE 20 code with REFUSED($n)"
+ret=0
+dig_with_opts +recurse www.isc.org @10.53.0.11 a >dig.out.ns11.test${n} || ret=1
+grep "status: REFUSED" dig.out.ns11.test${n} >/dev/null || ret=1
+grep -F "EDE: 20 (Not Authoritative)" dig.out.ns11.test${n} >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
 echo_i "exit status: $status"

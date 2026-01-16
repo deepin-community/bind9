@@ -39,6 +39,11 @@ controls {
         inet 10.53.0.3 port @CONTROLPORT@ allow { any; } keys { rndc_key; };
 };
 
+zone "." {
+	type hint;
+	file "../../_common/root.hint.blackhole";
+};
+
 /* Zones that are getting initially signed */
 
 /* The default case: No keys created, using default policy. */
@@ -82,13 +87,6 @@ zone "unlimited.kasp" {
 	type primary;
 	file "unlimited.kasp.db";
 	dnssec-policy "unlimited";
-};
-
-/* Manual rollover. */
-zone "manual-rollover.kasp" {
-	type primary;
-	file "manual-rollover.kasp.db";
-	dnssec-policy "manual-rollover";
 };
 
 /* A zone that inherits dnssec-policy. */
@@ -161,6 +159,14 @@ zone "inline-signing.kasp" {
 	dnssec-policy "default";
 };
 
+/* A zone that uses dnssec-policy with key stores. */
+zone "keystore.kasp" {
+	type primary;
+	file "keystore.kasp.db";
+	inline-signing yes;
+	dnssec-policy "keystore";
+};
+
 /*
  * A configured dnssec-policy but some keys already created.
  */
@@ -198,14 +204,6 @@ zone "rumoured.kasp" {
 	dnssec-policy "rsasha256";
 };
 
-/* RFC 8901 Multi-signer Model 2. */
-zone "multisigner-model2.kasp" {
-	type primary;
-	file "multisigner-model2.kasp.db";
-	dnssec-policy "multisigner-model2";
-	allow-update { any; };
-};
-
 /*
  * Different algorithms.
  */
@@ -240,17 +238,6 @@ zone "max-zone-ttl.kasp" {
 };
 
 /*
- * Zone for testing GL #2375: Three is a crowd.
- */
-zone "three-is-a-crowd.kasp" {
-	type primary;
-	file "three-is-a-crowd.kasp.db";
-	inline-signing yes;
-	/* Use same policy as KSK rollover test zones. */
-	dnssec-policy "ksk-doubleksk";
-};
-
-/*
  * Zones in different signing states.
  */
 
@@ -260,6 +247,15 @@ zone "three-is-a-crowd.kasp" {
 zone "expired-sigs.autosign" {
 	type primary;
 	file "expired-sigs.autosign.db";
+	dnssec-policy "autosign";
+};
+
+/*
+ * Zone that has DNSKEY TTL mismatch with the dnssec-policy.
+ */
+zone "dnskey-ttl-mismatch.autosign" {
+	type primary;
+	file "dnskey-ttl-mismatch.autosign.db";
 	dnssec-policy "autosign";
 };
 
@@ -279,6 +275,24 @@ zone "unfresh-sigs.autosign" {
 	type primary;
 	file "unfresh-sigs.autosign.db";
 	dnssec-policy "autosign";
+};
+
+/*
+ * Zone that has missing key files.
+ */
+zone "keyfiles-missing.autosign" {
+	type primary;
+	file "keyfiles-missing.autosign.db";
+	dnssec-policy "autosign";
+};
+
+/*
+ * Zone that has missing key files, manual-mode.
+ */
+zone "keyfiles-missing.manual" {
+	type primary;
+	file "keyfiles-missing.manual.db";
+	dnssec-policy "manual";
 };
 
 /*
@@ -306,176 +320,4 @@ zone "zsk-retired.autosign" {
 	type primary;
 	file "zsk-retired.autosign.db";
 	dnssec-policy "autosign";
-};
-
-/*
- * Zones for testing enabling DNSSEC.
- */
-zone "step1.enable-dnssec.autosign" {
-	type primary;
-	file "step1.enable-dnssec.autosign.db";
-	dnssec-policy "enable-dnssec";
-};
-zone "step2.enable-dnssec.autosign" {
-	type primary;
-	file "step2.enable-dnssec.autosign.db";
-	dnssec-policy "enable-dnssec";
-};
-zone "step3.enable-dnssec.autosign" {
-	type primary;
-	file "step3.enable-dnssec.autosign.db";
-	dnssec-policy "enable-dnssec";
-};
-zone "step4.enable-dnssec.autosign" {
-	type primary;
-	file "step4.enable-dnssec.autosign.db";
-	dnssec-policy "enable-dnssec";
-};
-
-/*
- * Zones for testing ZSK Pre-Publication steps.
- */
-zone "step1.zsk-prepub.autosign" {
-	type primary;
-	file "step1.zsk-prepub.autosign.db";
-	dnssec-policy "zsk-prepub";
-};
-zone "step2.zsk-prepub.autosign" {
-	type primary;
-	file "step2.zsk-prepub.autosign.db";
-	dnssec-policy "zsk-prepub";
-};
-zone "step3.zsk-prepub.autosign" {
-	type primary;
-	file "step3.zsk-prepub.autosign.db";
-	dnssec-policy "zsk-prepub";
-};
-zone "step4.zsk-prepub.autosign" {
-	type primary;
-	file "step4.zsk-prepub.autosign.db";
-	dnssec-policy "zsk-prepub";
-};
-zone "step5.zsk-prepub.autosign" {
-	type primary;
-	file "step5.zsk-prepub.autosign.db";
-	dnssec-policy "zsk-prepub";
-};
-zone "step6.zsk-prepub.autosign" {
-	type primary;
-	file "step6.zsk-prepub.autosign.db";
-	dnssec-policy "zsk-prepub";
-};
-
-/*
- * Zones for testing KSK Double-KSK steps.
- */
-zone "step1.ksk-doubleksk.autosign" {
-	type primary;
-	file "step1.ksk-doubleksk.autosign.db";
-	dnssec-policy "ksk-doubleksk";
-};
-zone "step2.ksk-doubleksk.autosign" {
-	type primary;
-	file "step2.ksk-doubleksk.autosign.db";
-	dnssec-policy "ksk-doubleksk";
-};
-zone "step3.ksk-doubleksk.autosign" {
-	type primary;
-	file "step3.ksk-doubleksk.autosign.db";
-	dnssec-policy "ksk-doubleksk";
-};
-zone "step4.ksk-doubleksk.autosign" {
-	type primary;
-	file "step4.ksk-doubleksk.autosign.db";
-	dnssec-policy "ksk-doubleksk";
-};
-zone "step5.ksk-doubleksk.autosign" {
-	type primary;
-	file "step5.ksk-doubleksk.autosign.db";
-	dnssec-policy "ksk-doubleksk";
-};
-zone "step6.ksk-doubleksk.autosign" {
-	type primary;
-	file "step6.ksk-doubleksk.autosign.db";
-	dnssec-policy "ksk-doubleksk";
-};
-
-/*
- * Zones for testing CSK rollover steps.
- */
-zone "step1.csk-roll.autosign" {
-	type primary;
-	file "step1.csk-roll.autosign.db";
-	dnssec-policy "csk-roll";
-};
-zone "step2.csk-roll.autosign" {
-	type primary;
-	file "step2.csk-roll.autosign.db";
-	dnssec-policy "csk-roll";
-};
-zone "step3.csk-roll.autosign" {
-	type primary;
-	file "step3.csk-roll.autosign.db";
-	dnssec-policy "csk-roll";
-};
-zone "step4.csk-roll.autosign" {
-	type primary;
-	file "step4.csk-roll.autosign.db";
-	dnssec-policy "csk-roll";
-};
-zone "step5.csk-roll.autosign" {
-	type primary;
-	file "step5.csk-roll.autosign.db";
-	dnssec-policy "csk-roll";
-};
-zone "step6.csk-roll.autosign" {
-	type primary;
-	file "step6.csk-roll.autosign.db";
-	dnssec-policy "csk-roll";
-};
-zone "step7.csk-roll.autosign" {
-	type primary;
-	file "step7.csk-roll.autosign.db";
-	dnssec-policy "csk-roll";
-};
-zone "step8.csk-roll.autosign" {
-	type primary;
-	file "step8.csk-roll.autosign.db";
-	dnssec-policy "csk-roll";
-};
-
-zone "step1.csk-roll2.autosign" {
-	type primary;
-	file "step1.csk-roll2.autosign.db";
-	dnssec-policy "csk-roll2";
-};
-zone "step2.csk-roll2.autosign" {
-	type primary;
-	file "step2.csk-roll2.autosign.db";
-	dnssec-policy "csk-roll2";
-};
-zone "step3.csk-roll2.autosign" {
-	type primary;
-	file "step3.csk-roll2.autosign.db";
-	dnssec-policy "csk-roll2";
-};
-zone "step4.csk-roll2.autosign" {
-	type primary;
-	file "step4.csk-roll2.autosign.db";
-	dnssec-policy "csk-roll2";
-};
-zone "step5.csk-roll2.autosign" {
-	type primary;
-	file "step5.csk-roll2.autosign.db";
-	dnssec-policy "csk-roll2";
-};
-zone "step6.csk-roll2.autosign" {
-	type primary;
-	file "step6.csk-roll2.autosign.db";
-	dnssec-policy "csk-roll2";
-};
-zone "step7.csk-roll2.autosign" {
-	type primary;
-	file "step7.csk-roll2.autosign.db";
-	dnssec-policy "csk-roll2";
 };

@@ -143,7 +143,7 @@ dns_requestmgr_create(isc_mem_t *mctx, isc_loopmgr_t *loopmgr,
 	for (size_t i = 0; i < nloops; i++) {
 		ISC_LIST_INIT(requestmgr->requests[i]);
 
-		/* unreferenced in requests_shutdown() */
+		/* unreferenced in requests_cancel() */
 		isc_loop_ref(isc_loop_get(requestmgr->loopmgr, i));
 	}
 
@@ -165,23 +165,23 @@ dns_requestmgr_create(isc_mem_t *mctx, isc_loopmgr_t *loopmgr,
 	req_log(ISC_LOG_DEBUG(3), "%s: %p", __func__, requestmgr);
 
 	*requestmgrp = requestmgr;
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static void
-requests_shutdown(void *arg) {
+requests_cancel(void *arg) {
 	dns_requestmgr_t *requestmgr = arg;
 	dns_request_t *request = NULL, *next = NULL;
 	uint32_t tid = isc_tid();
 
-	ISC_LIST_FOREACH_SAFE (requestmgr->requests[tid], request, link, next) {
+	ISC_LIST_FOREACH_SAFE(requestmgr->requests[tid], request, link, next) {
 		req_log(ISC_LOG_DEBUG(3), "%s(%" PRIu32 ": request %p",
 			__func__, tid, request);
 		if (DNS_REQUEST_COMPLETE(request)) {
 			/* The callback has been already scheduled */
 			continue;
 		}
-		req_sendevent(request, ISC_R_SHUTTINGDOWN);
+		req_sendevent(request, ISC_R_CANCELED);
 	}
 
 	isc_loop_unref(isc_loop_get(requestmgr->loopmgr, tid));
@@ -190,14 +190,19 @@ requests_shutdown(void *arg) {
 
 void
 dns_requestmgr_shutdown(dns_requestmgr_t *requestmgr) {
+	bool first;
 	REQUIRE(VALID_REQUESTMGR(requestmgr));
 
 	req_log(ISC_LOG_DEBUG(3), "%s: %p", __func__, requestmgr);
 
 	rcu_read_lock();
-	INSIST(atomic_compare_exchange_strong(&requestmgr->shuttingdown,
-					      &(bool){ false }, true));
+	first = atomic_compare_exchange_strong(&requestmgr->shuttingdown,
+					       &(bool){ false }, true);
 	rcu_read_unlock();
+
+	if (!first) {
+		return;
+	}
 
 	/*
 	 * Wait until all dns_request_create{raw}() are finished, so
@@ -212,12 +217,12 @@ dns_requestmgr_shutdown(dns_requestmgr_t *requestmgr) {
 
 		if (i == tid) {
 			/* Run the current loop synchronously */
-			requests_shutdown(requestmgr);
+			requests_cancel(requestmgr);
 			continue;
 		}
 
 		isc_loop_t *loop = isc_loop_get(requestmgr->loopmgr, i);
-		isc_async_run(loop, requests_shutdown, requestmgr);
+		isc_async_run(loop, requests_cancel, requestmgr);
 	}
 }
 
@@ -302,7 +307,7 @@ new_request(isc_mem_t *mctx, isc_loop_t *loop, isc_job_cb cb, void *arg,
 		request->timeout = udptimeout * 1000;
 	}
 
-	return (request);
+	return request;
 }
 
 static bool
@@ -315,43 +320,43 @@ isblackholed(dns_dispatchmgr_t *dispatchmgr, const isc_sockaddr_t *destaddr) {
 
 	blackhole = dns_dispatchmgr_getblackhole(dispatchmgr);
 	if (blackhole == NULL) {
-		return (false);
+		return false;
 	}
 
 	isc_netaddr_fromsockaddr(&netaddr, destaddr);
 	result = dns_acl_match(&netaddr, NULL, blackhole, NULL, &match, NULL);
 	if (result != ISC_R_SUCCESS || match <= 0) {
-		return (false);
+		return false;
 	}
 
 	isc_netaddr_format(&netaddr, netaddrstr, sizeof(netaddrstr));
 	req_log(ISC_LOG_DEBUG(10), "blackholed address %s", netaddrstr);
 
-	return (true);
+	return true;
 }
 
 static isc_result_t
 tcp_dispatch(bool newtcp, dns_requestmgr_t *requestmgr,
 	     const isc_sockaddr_t *srcaddr, const isc_sockaddr_t *destaddr,
-	     dns_dispatch_t **dispatchp) {
+	     dns_transport_t *transport, dns_dispatch_t **dispatchp) {
 	isc_result_t result;
 
 	if (!newtcp) {
 		result = dns_dispatch_gettcp(requestmgr->dispatchmgr, destaddr,
-					     srcaddr, dispatchp);
+					     srcaddr, transport, dispatchp);
 		if (result == ISC_R_SUCCESS) {
 			char peer[ISC_SOCKADDR_FORMATSIZE];
 
 			isc_sockaddr_format(destaddr, peer, sizeof(peer));
 			req_log(ISC_LOG_DEBUG(1),
 				"attached to TCP connection to %s", peer);
-			return (result);
+			return result;
 		}
 	}
 
 	result = dns_dispatch_createtcp(requestmgr->dispatchmgr, srcaddr,
-					destaddr, 0, dispatchp);
-	return (result);
+					destaddr, transport, 0, dispatchp);
+	return result;
 }
 
 static isc_result_t
@@ -370,32 +375,32 @@ udp_dispatch(dns_requestmgr_t *requestmgr, const isc_sockaddr_t *srcaddr,
 			break;
 
 		default:
-			return (ISC_R_NOTIMPLEMENTED);
+			return ISC_R_NOTIMPLEMENTED;
 		}
 		if (disp == NULL) {
-			return (ISC_R_FAMILYNOSUPPORT);
+			return ISC_R_FAMILYNOSUPPORT;
 		}
 		dns_dispatch_attach(disp, dispatchp);
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 
-	return (dns_dispatch_createudp(requestmgr->dispatchmgr, srcaddr,
-				       dispatchp));
+	return dns_dispatch_createudp(requestmgr->dispatchmgr, srcaddr,
+				      dispatchp);
 }
 
 static isc_result_t
 get_dispatch(bool tcp, bool newtcp, dns_requestmgr_t *requestmgr,
 	     const isc_sockaddr_t *srcaddr, const isc_sockaddr_t *destaddr,
-	     dns_dispatch_t **dispatchp) {
+	     dns_transport_t *transport, dns_dispatch_t **dispatchp) {
 	isc_result_t result;
 
 	if (tcp) {
 		result = tcp_dispatch(newtcp, requestmgr, srcaddr, destaddr,
-				      dispatchp);
+				      transport, dispatchp);
 	} else {
 		result = udp_dispatch(requestmgr, srcaddr, destaddr, dispatchp);
 	}
-	return (result);
+	return result;
 }
 
 isc_result_t
@@ -466,7 +471,7 @@ dns_request_createraw(dns_requestmgr_t *requestmgr, isc_buffer_t *msgbuf,
 
 again:
 	result = get_dispatch(tcp, newtcp, requestmgr, srcaddr, destaddr,
-			      &request->dispatch);
+			      transport, &request->dispatch);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup;
 	}
@@ -524,7 +529,7 @@ cleanup:
 
 done:
 	rcu_read_unlock();
-	return (result);
+	return result;
 }
 
 isc_result_t
@@ -554,7 +559,7 @@ dns_request_create(dns_requestmgr_t *requestmgr, dns_message_t *message,
 	if (srcaddr != NULL &&
 	    isc_sockaddr_pf(srcaddr) != isc_sockaddr_pf(destaddr))
 	{
-		return (ISC_R_FAMILYMISMATCH);
+		return ISC_R_FAMILYMISMATCH;
 	}
 
 	mctx = requestmgr->mctx;
@@ -591,7 +596,7 @@ dns_request_create(dns_requestmgr_t *requestmgr, dns_message_t *message,
 
 again:
 	result = get_dispatch(tcp, false, requestmgr, srcaddr, destaddr,
-			      &request->dispatch);
+			      transport, &request->dispatch);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup;
 	}
@@ -652,7 +657,7 @@ cleanup:
 done:
 	rcu_read_unlock();
 
-	return (result);
+	return result;
 }
 
 static isc_result_t
@@ -731,7 +736,7 @@ req_render(dns_message_t *message, isc_buffer_t **bufferp, unsigned int options,
 	dns_compress_invalidate(&cctx);
 	isc_buffer_free(&buf1);
 	*bufferp = buf2;
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 
 cleanup:
 	dns_message_renderreset(message);
@@ -742,11 +747,11 @@ cleanup:
 	if (buf2 != NULL) {
 		isc_buffer_free(&buf2);
 	}
-	return (result);
+	return result;
 }
 
-void
-dns_request_cancel(dns_request_t *request) {
+static void
+request_cancel(dns_request_t *request) {
 	REQUIRE(VALID_REQUEST(request));
 	REQUIRE(request->tid == isc_tid());
 
@@ -757,6 +762,26 @@ dns_request_cancel(dns_request_t *request) {
 
 	req_log(ISC_LOG_DEBUG(3), "%s: request %p", __func__, request);
 	req_sendevent(request, ISC_R_CANCELED); /* call asynchronously */
+}
+
+static void
+req_cancel_cb(void *arg) {
+	dns_request_t *request = arg;
+
+	request_cancel(request);
+	dns_request_unref(request);
+}
+
+void
+dns_request_cancel(dns_request_t *request) {
+	REQUIRE(VALID_REQUEST(request));
+
+	if (request->tid == isc_tid()) {
+		request_cancel(request);
+	} else {
+		dns_request_ref(request);
+		isc_async_run(request->loop, req_cancel_cb, request);
+	}
 }
 
 isc_result_t
@@ -773,16 +798,16 @@ dns_request_getresponse(dns_request_t *request, dns_message_t *message,
 	dns_message_setquerytsig(message, request->tsig);
 	result = dns_message_settsigkey(message, request->tsigkey);
 	if (result != ISC_R_SUCCESS) {
-		return (result);
+		return result;
 	}
 	result = dns_message_parse(message, request->answer, options);
 	if (result != ISC_R_SUCCESS) {
-		return (result);
+		return result;
 	}
 	if (request->tsigkey != NULL) {
 		result = dns_tsig_verify(request->answer, message, NULL, NULL);
 	}
-	return (result);
+	return result;
 }
 
 isc_buffer_t *
@@ -790,7 +815,7 @@ dns_request_getanswer(dns_request_t *request) {
 	REQUIRE(VALID_REQUEST(request));
 	REQUIRE(request->tid == isc_tid());
 
-	return (request->answer);
+	return request->answer;
 }
 
 bool
@@ -798,7 +823,7 @@ dns_request_usedtcp(dns_request_t *request) {
 	REQUIRE(VALID_REQUEST(request));
 	REQUIRE(request->tid == isc_tid());
 
-	return ((request->flags & DNS_REQUEST_F_TCP) != 0);
+	return (request->flags & DNS_REQUEST_F_TCP) != 0;
 }
 
 void
@@ -959,6 +984,11 @@ req_sendevent(dns_request_t *request, isc_result_t result) {
 
 	request->result = result;
 
+	/*
+	 * Do not call request->cb directly as it introduces a dead lock
+	 * between dns_zonemgr_shutdown and sendtoprimary in lib/dns/zone.c
+	 * zone->lock.
+	 */
 	dns_request_ref(request);
 	isc_async_run(request->loop, req_sendevent_cb, request);
 }
@@ -1003,7 +1033,7 @@ dns_request_getarg(dns_request_t *request) {
 	REQUIRE(VALID_REQUEST(request));
 	REQUIRE(request->tid == isc_tid());
 
-	return (request->arg);
+	return request->arg;
 }
 
 isc_result_t
@@ -1011,7 +1041,7 @@ dns_request_getresult(dns_request_t *request) {
 	REQUIRE(VALID_REQUEST(request));
 	REQUIRE(request->tid == isc_tid());
 
-	return (request->result);
+	return request->result;
 }
 
 #if DNS_REQUEST_TRACE

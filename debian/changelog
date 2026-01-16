@@ -1,3 +1,286 @@
+bind9 (1:9.20.15-2) unstable; urgency=medium
+
+  * Remove libdb-dev build depends (Closes: #1119196)
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 28 Oct 2025 07:28:58 +0100
+
+bind9 (1:9.20.15-1) unstable; urgency=medium
+
+  * New upstream version 9.20.15
+   - [CVE-2025-8677]: DNSSEC validation fails if matching but invalid
+     DNSKEY is found
+   - [CVE-2025-40778]: Address various spoofing attacks.
+   - [CVE-2025-40780]: Cache-poisoning due to weak pseudo-random number
+     generator
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 22 Oct 2025 16:40:20 +0200
+
+bind9 (1:9.20.13-1) unstable; urgency=medium
+
+  * New upstream version 9.20.13
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 10 Sep 2025 20:31:08 +0200
+
+bind9 (1:9.20.12-1) unstable; urgency=medium
+
+  * New upstream version 9.20.12
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 20 Aug 2025 17:22:43 +0200
+
+bind9 (1:9.20.11-4) unstable; urgency=medium
+
+  * Remove named.conf.default-zones.dpkg-dist from /etc/bind
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 27 Jul 2025 12:04:56 +0200
+
+bind9 (1:9.20.11-3) unstable; urgency=medium
+
+  * Remove the /etc/bind/named.conf.default-zones again from the
+    maintainer script as it might have been reinstalled by
+    accident. (Closes: #1108945)
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 27 Jul 2025 07:54:24 +0200
+
+bind9 (1:9.20.11-2) unstable; urgency=high
+
+  * Remove /etc/bind/named.conf.default-zones from the package as
+    the intent was to remove this file.  (Closes: #1108945)
+  * Add new /etc/bind/named.conf.root-hints file that makes 'named'
+    to use root.hints from dns-root-data again.
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 27 Jul 2025 06:48:59 +0200
+
+bind9 (1:9.20.11-1) unstable; urgency=high
+
+  * New upstream version 9.20.11
+   + [CVE2025-40777]: Fix a possible assertion failure when
+     stale-answer-client-timeout is set to 0.
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 16 Jul 2025 17:08:46 +0200
+
+bind9 (1:9.20.10-1) unstable; urgency=medium
+
+  * New upstream version 9.20.10
+
+ -- Ondřej Surý <ondrej@debian.org>  Fri, 20 Jun 2025 06:25:07 +0200
+
+bind9 (1:9.20.9-2) unstable; urgency=low
+
+  * Fix the default branch in the Vcs-Git field (Closes: #1106677)
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 28 May 2025 13:39:20 +0200
+
+bind9 (1:9.20.9-1) unstable; urgency=high
+
+  * New upstream version 9.20.9
+   + [CVE-2025-40775] Prevent assertion when processing TSIG algorithm.
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 21 May 2025 13:44:48 +0200
+
+bind9 (1:9.20.8-6) unstable; urgency=medium
+
+  * Adjust the autopkg zonetest
+
+ -- Ondřej Surý <ondrej@debian.org>  Fri, 18 Apr 2025 18:40:30 +0200
+
+bind9 (1:9.20.8-5) unstable; urgency=medium
+
+  [ Remus-Gabriel Chelu ]
+  * [INTL:ro] Romanian debconf templates translation of bind9
+
+  [ Ondřej Surý ]
+  * Fix lintian mismatched-override
+  * Use pkgconf instead of pkg-config
+  * Remove superfluous-file-pattern(s) from d/copyright
+  * Remove full path to named-checkconf in d/bind9.postinst
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 17 Apr 2025 21:50:52 +0200
+
+bind9 (1:9.20.8-4) unstable; urgency=medium
+
+  [ Lena Voytek ]
+  * Add zonetest DEP-8 test
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 17 Apr 2025 21:21:42 +0200
+
+bind9 (1:9.20.8-3) unstable; urgency=medium
+
+  [ Lena Voytek ]
+  * Fix German UTF-8 encoding
+  * Clean up debian/copyright file
+  * Remove lsb-base runtime dependency as it is no longer needed
+
+  [ Santiago Ruano Rincón ]
+  * Add debian/salsa-ci.yml
+  * Make d/tests/validation less flaky.
+
+  [ Carles Pina i Estany ]
+  * Added po-debconf Catalan translation
+
+  [ Mitchell Dzurick ]
+  * d/control: Suggest bind9-doc over bind-doc for the bind9 package
+
+  [ Debian Janitor ]
+  * Apply multi-arch hints. + bind9-doc: Add Multi-Arch: foreign.
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 17 Apr 2025 21:07:33 +0200
+
+bind9 (1:9.20.8-2) unstable; urgency=medium
+
+  * Validate configuration file before service restart
+    (Closes: #995310, #1054314)
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 17 Apr 2025 18:49:10 +0200
+
+bind9 (1:9.20.8-1) unstable; urgency=medium
+
+  * New upstream version 9.20.8
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 16 Apr 2025 15:05:13 +0200
+
+bind9 (1:9.20.7-1) unstable; urgency=medium
+
+  * New upstream version 9.20.7
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 13 Mar 2025 11:37:20 +0100
+
+bind9 (1:9.20.6-1) unstable; urgency=medium
+
+  * Add Provides: bind9utils and Provides: dnsutils to the respective
+    packages
+  * New upstream version 9.20.6
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 19 Feb 2025 16:00:19 +0100
+
+bind9 (1:9.20.5-1) unstable; urgency=medium
+
+  * New upstream version 9.20.5 (Closes: #1094735)
+   - CVE-2024-12705: DNS-over-HTTPS flooding fixes
+   - CVE-2024-11187: Limit additional section processing for large RDATA
+     sets
+  * Drop libltdl-dev from Build-Depends, libuv wrappers are used
+    for dlopen and friends.
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 27 Jan 2025 12:21:49 +0100
+
+bind9 (1:9.20.4-4) unstable; urgency=medium
+
+  * Revert "Temporarily use rbtdb as a zone database to prevent assertion
+    failure"
+  * Add pre-release patch for the NSEC3 encloser assertion failure
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 21 Jan 2025 16:16:07 +0100
+
+bind9 (1:9.20.4-3) unstable; urgency=high
+
+  * Temporarily use rbtdb as a zone database as workaround for an upstream
+    bug.
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 19 Dec 2024 05:56:30 +0100
+
+bind9 (1:9.20.4-2) unstable; urgency=medium
+
+  * Add upstream patch for the new GLUE cache implementation
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 15 Dec 2024 08:02:25 +0100
+
+bind9 (1:9.20.4-1) unstable; urgency=medium
+
+  * New upstream version 9.20.4
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 11 Dec 2024 17:35:53 +0100
+
+bind9 (1:9.20.3-1) unstable; urgency=medium
+
+  * New upstream version 9.20.3
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 10 Oct 2024 10:37:54 +0200
+
+bind9 (1:9.20.2-1) unstable; urgency=medium
+
+  * New upstream version 9.20.2
+
+ -- Ondřej Surý <ondrej@debian.org>  Fri, 20 Sep 2024 14:35:10 +0200
+
+bind9 (1:9.20.1-1) unstable; urgency=medium
+
+  * New upstream version 9.20.1
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 21 Aug 2024 15:07:52 +0200
+
+bind9 (1:9.20.0-2) unstable; urgency=medium
+
+  * Fix the assertion failure in samba-libs DLZ module. (Closes: #1074378)
+
+ -- Ondřej Surý <ondrej@debian.org>  Sat, 27 Jul 2024 05:02:39 +0200
+
+bind9 (1:9.20.0-1) unstable; urgency=high
+
+  * New upstream version 9.20.0
+   - CVE-2024-0760: A flood of DNS messages over TCP may make the server
+     unstable
+   - CVE-2024-1737: BIND's database will be slow if a very large number of
+     RRs exist at the same name
+   - CVE-2024-1975: SIG(0) can be used to exhaust CPU resources
+   - CVE-2024-4076: Assertion failure when serving both stale cache data
+     and authoritative zone content
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 16 Jul 2024 17:26:47 +0200
+
+bind9 (1:9.19.24-185-g392e7199df2-1) unstable; urgency=medium
+
+  * New upstream version 9.19.24-185-g392e7199df2
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 20 Jun 2024 15:11:56 +0200
+
+bind9 (1:9.19.24-2) unstable; urgency=medium
+
+  * Add dnssec-ksr tool to bind9-utils package
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 15 May 2024 20:59:35 +0200
+
+bind9 (1:9.19.24-1) unstable; urgency=medium
+
+  * New upstream version 9.19.24
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 15 May 2024 19:55:59 +0200
+
+bind9 (1:9.19.23-1) unstable; urgency=medium
+
+  * New upstream version 9.19.23
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 17 Apr 2024 23:48:03 +0200
+
+bind9 (1:9.19.22-1) unstable; urgency=medium
+
+  * New upstream version 9.19.22
+   - A regression caused by CVE-2023-6516 fix could lead into
+     an out-of-memory condition when the server is under heavy
+     load.
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 20 Mar 2024 14:17:43 +0100
+
+bind9 (1:9.19.21-1) unstable; urgency=high
+
+  [ Helmut Grohne ]
+  * Drop unused Build-Depends: python3. (Closes: #1063448)
+
+  [ Ondřej Surý ]
+  * New upstream version 9.19.21
+   - CVE-2023-4408: Parsing large DNS messages may cause excessive CPU
+     load
+   - CVE-2023-5517: Querying RFC 1918 reverse zones may cause an assertion
+     failure when "nxdomain-redirect" is enabled
+   - CVE-2023-5679: Enabling both DNS64 and serve-stale may cause an
+     assertion failure during recursive resolution
+   - CVE-2023-6516: Specific recursive query patterns may lead to an
+     out-of-memory condition
+   - CVE-2023-50387: KeyTrap - Extreme CPU consumption in DNSSEC validator
+   - CVE-2023-50868: Preparing an NSEC3 closest encloser proof can exhaust
+     CPU resources
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 12 Feb 2024 17:04:19 +0100
+
 bind9 (1:9.19.19-1) unstable; urgency=medium
 
   [ Ondřej Surý ]

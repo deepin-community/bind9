@@ -67,11 +67,13 @@ libdns_la_HEADERS =			\
 	include/dns/dns64.h		\
 	include/dns/dnsrps.h		\
 	include/dns/dnssec.h		\
+	include/dns/dnstap.h		\
 	include/dns/ds.h		\
 	include/dns/dsdigest.h		\
-	include/dns/dnstap.h		\
+	include/dns/dsync.h		\
 	include/dns/dyndb.h		\
 	include/dns/ecs.h		\
+	include/dns/ede.h		\
 	include/dns/edns.h		\
 	include/dns/fixedname.h		\
 	include/dns/forward.h		\
@@ -83,6 +85,7 @@ libdns_la_HEADERS =			\
 	include/dns/keydata.h		\
 	include/dns/keyflags.h		\
 	include/dns/keymgr.h		\
+	include/dns/keystore.h		\
 	include/dns/keytable.h		\
 	include/dns/keyvalues.h		\
 	include/dns/librpz.h		\
@@ -121,6 +124,7 @@ libdns_la_HEADERS =			\
 	include/dns/sdlz.h		\
 	include/dns/secalg.h		\
 	include/dns/secproto.h		\
+	include/dns/skr.h		\
 	include/dns/soa.h		\
 	include/dns/ssu.h		\
 	include/dns/stats.h		\
@@ -164,6 +168,7 @@ libdns_la_SOURCES =			\
 	clientinfo.c			\
 	compress.c			\
 	db.c				\
+	db_p.h				\
 	dbiterator.c			\
 	diff.c				\
 	dispatch.c			\
@@ -179,6 +184,7 @@ libdns_la_SOURCES =			\
 	dst_parse.h			\
 	dyndb.c				\
 	ecs.c				\
+	ede.c				\
 	fixedname.c			\
 	forward.c			\
 	gssapictx.c			\
@@ -190,6 +196,7 @@ libdns_la_SOURCES =			\
 	key.c				\
 	keydata.c			\
 	keymgr.c			\
+	keystore.c			\
 	keytable.c			\
 	log.c				\
 	master.c			\
@@ -213,11 +220,15 @@ libdns_la_SOURCES =			\
 	probes.d			\
 	qp.c				\
 	qp_p.h				\
+	qpzone_p.h			\
+	qpzone.c			\
 	rbt.c				\
 	rbt-cachedb.c			\
 	rbt-zonedb.c			\
-	rbtdb_p.h			\
 	rbtdb.c				\
+	rbtdb_p.h			\
+	qpcache.c				\
+	qpcache_p.h			\
 	rcode.c				\
 	rdata.c				\
 	rdatalist.c			\
@@ -234,6 +245,7 @@ libdns_la_SOURCES =			\
 	rrl.c				\
 	rriterator.c			\
 	sdlz.c				\
+	skr.c				\
 	soa.c				\
 	ssu.c				\
 	ssu_external.c			\

@@ -77,6 +77,31 @@ done
 
 echo_i "ns3/sign.sh: example zones"
 
+# A zone that will be treated as insecure as the DEFAULT_ALGORITHM is
+# disabled for it.
+zone=badalg.secure.example.
+infile=badalg.secure.example.db.in
+zonefile=badalg.secure.example.db
+
+keyname=$("$KEYGEN" -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" "$zone")
+
+cat "$infile" "$keyname.key" >"$zonefile"
+
+"$SIGNER" -z -o "$zone" "$zonefile" >/dev/null
+
+# A zone that will be treated as insecure as the DEFAULT_ALGORITHM is
+# disabled for ent.secure.example.
+zone=zonecut.ent.secure.example.
+infile=zonecut.ent.secure.example.db.in
+zonefile=zonecut.ent.secure.example.db
+
+keyname=$("$KEYGEN" -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" "$zone")
+
+cat "$infile" "$keyname.key" >"$zonefile"
+
+"$SIGNER" -z -o "$zone" "$zonefile" >/dev/null
+
+#
 zone=secure.example.
 infile=secure.example.db.in
 zonefile=secure.example.db
@@ -85,9 +110,11 @@ cnameandkey=$("$KEYGEN" -T KEY -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n 
 dnameandkey=$("$KEYGEN" -T KEY -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n host "dnameandkey.$zone")
 keyname=$("$KEYGEN" -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n zone "$zone")
 
-cat "$infile" "$cnameandkey.key" "$dnameandkey.key" "$keyname.key" >"$zonefile"
+cat "$infile" dsset-badalg.secure.example. "$cnameandkey.key" "$dnameandkey.key" "$keyname.key" >"$zonefile"
 
-"$SIGNER" -z -o "$zone" "$zonefile" >/dev/null
+"$SIGNER" -z -D -o "$zone" "$zonefile" >/dev/null
+cat "$zonefile" "$zonefile".signed >"$zonefile".tmp
+mv "$zonefile".tmp "$zonefile".signed
 
 zone=bogus.example.
 infile=bogus.example.db.in
@@ -295,6 +322,48 @@ awk '$4 == "DNSKEY" { $7 = 255 } $4 == "RRSIG" { $6 = 255 } { print }' ${zonefil
 
 DSFILE="dsset-${zone}."
 $DSFROMKEY -A -f ${zonefile}.signed "$zone" >"$DSFILE"
+
+#
+# A zone which uses an unsupported algorithm for a DNSKEY and an unsupported
+# digest for another DNSKEY
+#
+zone=digest-alg-unsupported.example.
+infile=digest-alg-unsupported.example.db.in
+zonefile=digest-alg-unsupported.example.db
+
+cnameandkey=$("$KEYGEN" -T KEY -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n host "cnameandkey.$zone")
+dnameandkey=$("$KEYGEN" -T KEY -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n host "dnameandkey.$zone")
+keyname=$("$KEYGEN" -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n zone "$zone")
+keyname2=$("$KEYGEN" -q -a ECDSAP384SHA384 -b "$DEFAULT_BITS" -n zone "$zone")
+
+cat "$infile" "$cnameandkey.key" "$dnameandkey.key" "$keyname.key" "$keyname2.key" >"$zonefile"
+
+"$SIGNER" -z -D -o "$zone" "$zonefile" >/dev/null
+cat "$zonefile" "$zonefile".signed >"$zonefile".tmp
+mv "$zonefile".tmp "$zonefile".signed
+
+# override generated DS record file so we can set different digest to each keys
+DSFILE="dsset-${zone}"
+$DSFROMKEY -a SHA-384 -A -f ${zonefile}.signed "$zone" | head -n 1 >"$DSFILE"
+$DSFROMKEY -2 -A -f ${zonefile}.signed "$zone" | tail -1 >>"$DSFILE"
+
+#
+# A zone which is fine by itself (supported algorithm) but that is used
+# to mimic unsupported DS digest (see ns8).
+#
+zone=ds-unsupported.example.
+infile=ds-unsupported.example.db.in
+zonefile=ds-unsupported.example.db
+
+cnameandkey=$("$KEYGEN" -T KEY -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n host "cnameandkey.$zone")
+dnameandkey=$("$KEYGEN" -T KEY -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n host "dnameandkey.$zone")
+keyname=$("$KEYGEN" -q -a "$DEFAULT_ALGORITHM" -b "$DEFAULT_BITS" -n zone "$zone")
+
+cat "$infile" "$cnameandkey.key" "$dnameandkey.key" "$keyname.key" >"$zonefile"
+
+"$SIGNER" -z -D -o "$zone" "$zonefile" >/dev/null
+cat "$zonefile" "$zonefile".signed >"$zonefile".tmp
+mv "$zonefile".tmp "$zonefile".signed
 
 #
 # A zone with a published unsupported DNSKEY algorithm (Reserved).

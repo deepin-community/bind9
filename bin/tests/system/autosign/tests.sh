@@ -91,10 +91,10 @@ checkjitter() {
 
   _count=0
   # Check if we have at least 4 days
-  # This number has been tuned for `signatures-validity 10d; signatures-refresh 2d`, as
-  # 1 signature expiration dates should be spread out across at most 8 (10-2) days
-  # 2. we remove first and last day to remove frequency outlier, we are left with 6 (8-2) days
-  # 3. we subtract two more days to allow test pass on day boundaries, etc. leaving us with 4 (6-2)
+  # This number has been tuned for `signatures-validity 10d; signatures-jitter 8d`, as
+  # 1. signature expiration dates should be spread out across at most 8 days
+  # 2. we remove first and last day to remove frequency outlier, we are left with 6 days
+  # 3. we subtract two more days to allow test pass on day boundaries, etc. leaving us with 4 days
   for _num in $_expiretimes; do
     _count=$((_count + 1))
   done
@@ -258,7 +258,7 @@ echo_i "dumping zone files"
 
 now="$(TZ=UTC date +%Y%m%d%H%M%S)"
 check_expiry() (
-  $DIG $DIGOPTS AXFR oldsigs.example @10.53.0.3 >dig.out.test$n
+  $DIG $DIGOPTS AXFR oldsigs.example @10.53.0.3 >dig.out.test$n || return 1
   nearest_expiration="$(awk '$4 == "RRSIG" { print $9 }' <dig.out.test$n | sort -n | head -1)"
   if [ "$nearest_expiration" -le "$now" ]; then
     echo_i "failed: $nearest_expiration <= $now"
@@ -822,7 +822,7 @@ echo_i "prepublish key for ZSK $id"
 newserial=$oldserial
 try=0
 while [ $oldserial -eq $newserial -a $try -lt 42 ]; do
-  $DIG $DIGOPTS +short soa prepub.example @10.53.0.3 >dig.out.ns3.test$n.2
+  $DIG $DIGOPTS +short soa prepub.example @10.53.0.3 >dig.out.ns3.test$n.2 || true
   newserial=$(cat dig.out.ns3.test$n.2 | awk '$0 !~ /SOA/ {print $3}')
   sleep 1
   try=$((try + 1))
@@ -890,8 +890,9 @@ checkprivate private.secure.example 10.53.0.3 2 || ret=1 # pre-signed
 checkprivate nsec3.example 10.53.0.3 || ret=1
 checkprivate nsec3.nsec3.example 10.53.0.3 || ret=1
 checkprivate nsec3.optout.example 10.53.0.3 || ret=1
-checkprivate nsec3-to-nsec.example 10.53.0.3 2 || ret=1 # automatically removed
-if $SHELL ../testcrypto.sh -q RSASHA1; then
+checkprivate nsec3-to-nsec.example 10.53.0.3 2 || ret=1  # automatically removed
+checkprivate nsec3-to-nsec3.example 10.53.0.3 2 || ret=1 # automatically removed
+if [ $RSASHA1_SUPPORTED = 1 ]; then
   checkprivate nsec-only.example 10.53.0.3 || ret=1
 fi
 checkprivate oldsigs.example 10.53.0.3 2 || ret=1 # pre-signed
@@ -1102,8 +1103,8 @@ status=$((status + ret))
 
 echo_i "test CDS and CDNSKEY auto generation ($n)"
 ret=0
-$DIG $DIGOPTS @10.53.0.3 sync.example cds >dig.out.ns3.cdstest$n
-$DIG $DIGOPTS @10.53.0.3 sync.example cdnskey >dig.out.ns3.cdnskeytest$n
+$DIG $DIGOPTS @10.53.0.3 sync.example cds >dig.out.ns3.cdstest$n || ret=1
+$DIG $DIGOPTS @10.53.0.3 sync.example cdnskey >dig.out.ns3.cdnskeytest$n || ret=1
 grep -i "sync.example.*in.cds.*[1-9][0-9]* " dig.out.ns3.cdstest$n >/dev/null || ret=1
 grep -i "sync.example.*in.cdnskey.*257 " dig.out.ns3.cdnskeytest$n >/dev/null || ret=1
 n=$((n + 1))
@@ -1112,9 +1113,9 @@ status=$((status + ret))
 
 echo_i "test 'csk' affects DNSKEY/CDS/CDNSKEY ($n)"
 ret=0
-$DIG $DIGOPTS @10.53.0.3 sync.example dnskey >dig.out.ns3.dnskeytest$n
-$DIG $DIGOPTS @10.53.0.3 sync.example cdnskey >dig.out.ns3.cdnskeytest$n
-$DIG $DIGOPTS @10.53.0.3 sync.example cds >dig.out.ns3.cdstest$n
+$DIG $DIGOPTS @10.53.0.3 sync.example dnskey >dig.out.ns3.dnskeytest$n || ret=1
+$DIG $DIGOPTS @10.53.0.3 sync.example cdnskey >dig.out.ns3.cdnskeytest$n || ret=1
+$DIG $DIGOPTS @10.53.0.3 sync.example cds >dig.out.ns3.cdstest$n || ret=1
 lines=$(awk '$4 == "RRSIG" && $5 == "DNSKEY" {print}' dig.out.ns3.dnskeytest$n | wc -l)
 test ${lines:-0} -eq 2 || ret=1
 lines=$(awk '$4 == "RRSIG" && $5 == "CDNSKEY" {print}' dig.out.ns3.cdnskeytest$n | wc -l)
@@ -1127,9 +1128,9 @@ status=$((status + ret))
 
 echo_i "test 'ksk' affects DNSKEY/CDS/CDNSKEY ($n)"
 ret=0
-$DIG $DIGOPTS @10.53.0.3 kskonly.example dnskey >dig.out.ns3.dnskeytest$n
-$DIG $DIGOPTS @10.53.0.3 kskonly.example cdnskey >dig.out.ns3.cdnskeytest$n
-$DIG $DIGOPTS @10.53.0.3 kskonly.example cds >dig.out.ns3.cdstest$n
+$DIG $DIGOPTS @10.53.0.3 kskonly.example dnskey >dig.out.ns3.dnskeytest$n || ret=1
+$DIG $DIGOPTS @10.53.0.3 kskonly.example cdnskey >dig.out.ns3.cdnskeytest$n || ret=1
+$DIG $DIGOPTS @10.53.0.3 kskonly.example cds >dig.out.ns3.cdstest$n || ret=1
 lines=$(awk '$4 == "RRSIG" && $5 == "DNSKEY" {print}' dig.out.ns3.dnskeytest$n | wc -l)
 test ${lines:-0} -eq 1 || ret=1
 lines=$(awk '$4 == "RRSIG" && $5 == "CDNSKEY" {print}' dig.out.ns3.cdnskeytest$n | wc -l)
@@ -1177,7 +1178,7 @@ status=$((status + ret))
 
 echo_i "check that zone with inactive ZSK and active KSK is properly autosigned ($n)"
 ret=0
-$DIG $DIGOPTS @10.53.0.3 axfr inaczsk2.example >dig.out.ns3.test$n
+$DIG $DIGOPTS @10.53.0.3 axfr inaczsk2.example >dig.out.ns3.test$n || ret=1
 grep "SOA ${DEFAULT_ALGORITHM_NUMBER} 2" dig.out.ns3.test$n >/dev/null || ret=1
 n=$((n + 1))
 if [ $ret != 0 ]; then echo_i "failed"; fi
@@ -1251,7 +1252,7 @@ del=$(grep "DNSKEY .* is now deleted" ns2/named.run | wc -l)
 [ "$del" -eq 0 ] || ret=1
 pub=$(grep "DNSKEY .* is now published" ns3/named.run | grep -v "CDNSKEY" | wc -l)
 act=$(grep "DNSKEY .* is now active" ns3/named.run | wc -l)
-if $SHELL ../testcrypto.sh -q RSASHA1; then
+if [ $RSASHA1_SUPPORTED = 1 ]; then
   # Include two log lines for nsec-only zone.
   [ "$pub" -eq 53 ] || ret=1
   [ "$act" -eq 53 ] || ret=1
@@ -1269,14 +1270,14 @@ n=$((n + 1))
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
-echo_i "check removal of ENT NSEC3 records when opt out delegations are removed ($n)"
-zone=optout-with-ent
-hash=JE76PJ65FUO86UIR594L8P0SNJJ6RMNI
+echo_i "check removal of ENT NSEC3 records when delegations are removed ($n)"
+zone=nsec3-with-ent
+hash=M9SFFA181BCTR8D18LQUPST4N6BL304D
 
 # check that NSEC3 for ENT is present
 echo_i "check ENT NSEC3 is initially present"
 ret=0
-$DIG $DIGOPTS @10.53.0.2 a "ent.${zone}" >dig.out.pre.ns2.test$n
+$DIG $DIGOPTS @10.53.0.2 a "ent.${zone}" >dig.out.pre.ns2.test$n || ret=1
 grep "status: NOERROR" dig.out.pre.ns2.test$n >/dev/null || ret=1
 grep "ANSWER: 0, AUTHORITY: 4, " dig.out.pre.ns2.test$n >/dev/null || ret=1
 grep "^${hash}.${zone}." dig.out.pre.ns2.test$n >/dev/null || ret=1
@@ -1294,8 +1295,8 @@ ret=0
   echo send
 ) | $NSUPDATE
 # check that NSEC3 for ENT is still present
-$DIG $DIGOPTS @10.53.0.2 a "ent.${zone}" >dig.out.pre.ns2.test$n
-$DIG $DIGOPTS @10.53.0.2 a "ent.${zone}" >dig.out.mid.ns2.test$n
+$DIG $DIGOPTS @10.53.0.2 a "ent.${zone}" >dig.out.pre.ns2.test$n || ret=1
+$DIG $DIGOPTS @10.53.0.2 a "ent.${zone}" >dig.out.mid.ns2.test$n || ret=1
 grep "status: NOERROR" dig.out.mid.ns2.test$n >/dev/null || ret=1
 grep "ANSWER: 0, AUTHORITY: 4, " dig.out.mid.ns2.test$n >/dev/null || ret=1
 grep "^${hash}.${zone}." dig.out.mid.ns2.test$n >/dev/null || ret=1
@@ -1314,12 +1315,52 @@ ret=0
 ) | $NSUPDATE
 # check that NSEC3 for ENT is gone
 echo_i "check ENT NSEC3 is gone for zone $zone hash $hash"
-$DIG $DIGOPTS @10.53.0.2 a "ent.${zone}" >dig.out.post.ns2.test$n
+$DIG $DIGOPTS @10.53.0.2 a "ent.${zone}" >dig.out.post.ns2.test$n || ret=1
 grep "status: NXDOMAIN" dig.out.post.ns2.test$n >/dev/null || ret=1
 grep "ANSWER: 0, AUTHORITY: 4, " dig.out.post.ns2.test$n >/dev/null || ret=1
 grep "^${hash}.${zone}." dig.out.post.ns2.test$n >/dev/null && ret=1
-$DIG $DIGOPTS @10.53.0.2 axfr "${zone}" >dig.out.axfr.ns2.test$n
+$DIG $DIGOPTS @10.53.0.2 axfr "${zone}" >dig.out.axfr.ns2.test$n || ret=1
 grep "^${hash}.${zone}." dig.out.axfr.ns2.test$n >/dev/null && ret=1
+n=$((n + 1))
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+echo_i "check that the startup change from NSEC3 to NSEC is properly signed ($n)"
+ret=0
+$JOURNALPRINT ns3/nsec3-to-nsec.example.db.jnl \
+  | awk 'BEGIN { private=0; rrsig=0; ok=0 }
+$1 == "del" && $5 == "SOA" { if (private || rrsig) { if (private == rrsig) { exit(0); } else { exit(1); } } }
+$1 == "add" && $5 == "TYPE65534" { private=1 }
+$1 == "add" && $5 == "RRSIG" && $6 == "TYPE65534" { rrsig=1 }
+END { if (private || rrsig) { if (private == rrsig) { exit(0); } else { exit(1); } } else { exit (1); } }
+' || ret=1
+n=$((n + 1))
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+echo_i "check that NSEC3 to NSEC builds the NSEC chain first ($n)"
+ret=0
+$JOURNALPRINT ns3/nsec3-to-nsec.example.db.jnl \
+  | awk 'BEGIN { nsec3param=0; nsec=0 }
+$1 == "del" && $5 == "SOA" { if (nsec3param || nsec) { if (nsec3param && !nsec) { exit(1); } else { exit(0); } } }
+$1 == "del" && $5 == "NSEC3PARAM" { nsec3param=1 }
+$1 == "add" && $2 == "nsec3-to-nsec.example." && $5 == "NSEC" { nsec=1 }
+END { if (nsec3param || nsec) { if (nsec3param && !nsec) { exit(1); } else { exit(0); } } else { exit(1); } }
+' || ret=1
+n=$((n + 1))
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+echo_i "check that NSEC3 to NSEC3 builds the new NSEC3 chain first ($n)"
+ret=0
+$JOURNALPRINT ns3/nsec3-to-nsec3.example.db.jnl \
+  | awk 'BEGIN { addnsec3param=0; delnsec3param=0; nsec3=0 }
+$1 == "del" && $5 == "SOA" { if (delnsec3param || nsec3 || addnsec3param) { if (delnsec3param && (!nsec3 || !addnsec3param)) { exit(1); } else { exit(0); } } }
+$1 == "del" && $5 == "NSEC3PARAM" { delnsec3param=1 }
+$1 == "add" && $5 == "NSEC3PARAM" { addnsec3param=1 }
+$1 == "add" && $5 == "NSEC3" { nsec3=1 }
+END { if (delnsec3param || nsec3 || addnsec3param) { if (delnsec3param && (!nsec3 || !addnsec3param)) { exit(1); } else { exit(0); } } else { exit(1); } }
+' || ret=1
 n=$((n + 1))
 if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
 status=$((status + ret))

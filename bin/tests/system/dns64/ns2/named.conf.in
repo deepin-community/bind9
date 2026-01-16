@@ -25,7 +25,7 @@ options {
 	listen-on-v6 { none; };
 	recursion yes;
 	notify yes;
-	dnssec-validation yes;
+	dnssec-validation no;
 
 	dns64 2001:aaaa::/96 {
 		clients { 10.53.0.2; };
@@ -59,6 +59,7 @@ options {
 
 	response-policy { zone "rpz"; };
 };
+
 
 zone "." {
 	type hint;

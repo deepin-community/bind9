@@ -174,6 +174,32 @@ dns_client_setservers(dns_client_t *client, dns_rdataclass_t rdclass,
  *\li	Anything else				Failure.
  */
 
+void
+dns_client_setmaxrestarts(dns_client_t *client, uint8_t max_restarts);
+/*%<
+ * Set the number of permissible chained queries before we give up,
+ * to prevent CNAME loops. This defaults to 11.
+ *
+ * Requires:
+ *
+ *\li	'client' is a valid client.
+
+ *\li	'max_restarts' is greater than 0.
+ */
+
+void
+dns_client_setmaxqueries(dns_client_t *client, uint8_t max_queries);
+/*%<
+ * Set the number of permissible outgoing queries before we give up,
+ * This defaults to 200.
+ *
+ * Requires:
+ *
+ *\li	'client' is a valid client.
+
+ *\li	'max_queries' is greater than 0.
+ */
+
 typedef void (*dns_client_resolve_cb)(dns_client_t     *client,
 				      const dns_name_t *name,
 				      dns_namelist_t   *namelist,

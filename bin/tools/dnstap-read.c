@@ -32,6 +32,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <protobuf-c/protobuf-c.h>
 
@@ -83,7 +84,7 @@ fatal(const char *format, ...) {
 	vfprintf(stderr, format, args);
 	va_end(args);
 	fprintf(stderr, "\n");
-	exit(1);
+	_exit(EXIT_FAILURE);
 }
 
 static void
@@ -268,7 +269,8 @@ print_yaml(dns_dtdata_t *dt) {
 		}
 	}
 
-	printf("  socket_protocol: %s\n", dt->tcp ? "TCP" : "UDP");
+	printf("  socket_protocol: %s\n",
+	       dt->transport == DNS_TRANSPORT_UDP ? "UDP" : "TCP");
 
 	if (m->has_query_address) {
 		ProtobufCBinaryData *ip = &m->query_address;
@@ -360,7 +362,7 @@ main(int argc, char *argv[]) {
 			break;
 		default:
 			usage();
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 	}
 

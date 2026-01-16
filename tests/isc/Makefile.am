@@ -88,6 +88,10 @@ dnsstream_utils_test_SOURCES =	\
 	dnsstream_utils_test.c \
 	dnsstream_utils_test_data.h
 
+hashmap_test_SOURCES =	\
+	hashmap_test.c	\
+	hashmap_nodes.h
+
 hmac_test_CPPFLAGS =	\
 	$(AM_CPPFLAGS)	\
 	$(OPENSSL_CFLAGS)
@@ -115,10 +119,12 @@ proxyheader_test_SOURCES =	\
 	proxyheader_test_data.h
 
 proxystream_test_CPPFLAGS =	\
-	$(AM_CPPFLAGS)
+	$(AM_CPPFLAGS)		\
+	$(OPENSSL_CFLAGS)
 
 proxystream_test_LDADD =	\
-	$(LDADD)
+	$(LDADD)		\
+	$(OPENSSL_LIBS)
 
 proxystream_test_SOURCES =	\
 	proxystream_test.c \

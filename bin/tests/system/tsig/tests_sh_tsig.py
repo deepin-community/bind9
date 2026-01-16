@@ -9,6 +9,21 @@
 # See the COPYRIGHT file distributed with this work for additional
 # information regarding copyright ownership.
 
+import pytest
+
+pytestmark = pytest.mark.extra_artifacts(
+    [
+        "dig.out.*",
+        "keygen.out*",
+        "packet.out",
+        "ans*/ans.run",
+        "ns1/named-fips.conf",
+    ]
+)
+
+# TSIG queries not supported by isctest.asyncserver with old dnspython
+pytest.importorskip("dns", minversion="2.0.0")
+
 
 def test_tsig(run_tests_sh):
     run_tests_sh()

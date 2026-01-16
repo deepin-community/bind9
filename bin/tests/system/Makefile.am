@@ -86,6 +86,7 @@ TESTS =				\
 	autosign		\
 	builtin			\
 	cacheclean		\
+	camp			\
 	case			\
 	catz			\
 	cds			\
@@ -95,6 +96,7 @@ TESTS =				\
 	checknames		\
 	checkzone		\
 	cookie			\
+	cpu			\
 	database		\
 	dialup			\
 	digdelv			\
@@ -111,7 +113,7 @@ TESTS =				\
 	ednscompliance		\
 	emptyzones		\
 	enginepkcs11		\
-	filter-aaaa		\
+	filters			\
 	fetchlimit		\
 	formerr			\
 	forward			\
@@ -128,6 +130,7 @@ TESTS =				\
 	kasp			\
 	keepalive		\
 	keyfromlabel		\
+	ksr			\
 	legacy			\
 	limits			\
 	logfileconfig		\
@@ -148,10 +151,25 @@ TESTS =				\
 	proxy			\
 	pipelined		\
 	qmin			\
+	query-source		\
 	reclimit		\
 	redirect		\
 	resolver		\
 	rndc			\
+	rollover		\
+	rollover-algo-csk	\
+	rollover-algo-ksk-zsk	\
+	rollover-csk-roll1	\
+	rollover-csk-roll2	\
+	rollover-dynamic2inline	\
+	rollover-enable-dnssec	\
+	rollover-going-insecure	\
+	rollover-ksk-3crowd	\
+	rollover-ksk-doubleksk	\
+	rollover-lifetime	\
+	rollover-multisigner	\
+	rollover-straight2none	\
+	rollover-zsk-prepub	\
 	rootkeysentinel		\
 	rpzextra		\
 	rrchecker		\

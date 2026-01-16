@@ -41,6 +41,7 @@ set_zone_policy() {
   POLICY=$2
   NUM_KEYS=$3
   DNSKEY_TTL=$4
+  KEYFILE_TTL=$4
   # The CDS digest type in these tests are all the default,
   # which is SHA-256 (2).
   CDS_SHA256="yes"
@@ -241,7 +242,7 @@ set_key_default_values "KEY1"
 echo_i "initial check zone ${ZONE}"
 check_nsec
 
-if ($SHELL ../testcrypto.sh -q RSASHA1); then
+if [ $RSASHA1_SUPPORTED = 1 ]; then
   # Zone: rsasha1-to-nsec3.kasp.
   set_zone_policy "rsasha1-to-nsec3.kasp" "rsasha1" 1 3600
   set_server "ns3" "10.53.0.3"
@@ -390,7 +391,7 @@ check_nsec
 # Reconfig named.
 ret=0
 echo_i "reconfig dnssec-policy to trigger nsec3 rollovers"
-if ! ($SHELL ../testcrypto.sh -q RSASHA1); then
+if [ $RSASHA1_SUPPORTED = 0 ]; then
   copy_setports ns3/named2-fips.conf.in ns3/named.conf
 else
   copy_setports ns3/named2-fips.conf.in ns3/named-fips.conf
@@ -406,7 +407,7 @@ set_key_default_values "KEY1"
 echo_i "check zone ${ZONE} after reconfig"
 check_nsec3
 
-if ($SHELL ../testcrypto.sh -q RSASHA1); then
+if [ $RSASHA1_SUPPORTED = 1 ]; then
   # Zone: rsasha1-to-nsec3.kasp.
   set_zone_policy "rsasha1-to-nsec3.kasp" "nsec3" 2 3600
   set_server "ns3" "10.53.0.3"
@@ -582,6 +583,41 @@ set_nsec3param "0" "0"
 set_key_default_values "KEY1"
 echo_i "check zone ${ZONE} after reload"
 check_nsec3
+
+# Zone: nsec3-ent.kasp (regression test for #5108)
+n=$((n + 1))
+echo_i "check query for newly empty name does not crash ($n)"
+set_zone_policy "nsec3-ent.kasp"
+set_server "ns3" "10.53.0.3"
+# confirm the pre-existing name still exists
+dig_with_opts +noquestion "@${SERVER}" c.$ZONE >"dig.out.$ZONE.test$n.1" || ret=1
+grep "c\.nsec3-ent\.kasp\..*IN.*A.*10\.0\.0\.3" "dig.out.$ZONE.test$n.1" >/dev/null || ret=1
+# remove a name, bump the SOA, and reload
+sed -e 's/1 *; serial/2/' -e '/^c/d' ns3/template.db.in >ns3/nsec3-ent.kasp.db
+rndc_reload ns3 10.53.0.3
+# try the query again
+dig_with_opts +noquestion "@${SERVER}" c.$ZONE >"dig.out.$ZONE.test$n.2" || ret=1
+grep "status: NXDOMAIN" "dig.out.$ZONE.test$n.2" >/dev/null || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
+echo_i "check queries for new names below ENT do not crash ($n)"
+set_zone_policy "nsec3-ent.kasp"
+set_server "ns3" "10.53.0.3"
+# confirm the ENT name does not exist yet
+dig_with_opts +noquestion "@${SERVER}" x.y.z.$ZONE >"dig.out.$ZONE.test$n.1" || ret=1
+grep "status: NXDOMAIN" "dig.out.$ZONE.test$n.1" >/dev/null || ret=1
+# add a name with an ENT, bump the SOA, and reload ensuring the time stamp changes
+sleep 1
+sed -e 's/1 *; serial/3/' ns3/template.db.in >ns3/nsec3-ent.kasp.db
+echo "x.y.z A 10.0.0.4" >>ns3/nsec3-ent.kasp.db
+rndc_reload ns3 10.53.0.3
+# try the query again
+dig_with_opts +noquestion "@${SERVER}" x.y.z.$ZONE >"dig.out.$ZONE.test$n.2" || ret=1
+grep "x\.y\.z\.nsec3-ent\.kasp\..*IN.*A.*10\.0\.0\.4" "dig.out.$ZONE.test$n.2" >/dev/null || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
 
 echo_i "exit status: $status"
 [ $status -eq 0 ] || exit 1

@@ -919,6 +919,7 @@
                   <th>Local Serial</th>
                   <th>Remote Serial</th>
                   <th>IXFR</th>
+                  <th>First Refresh</th>
                   <th>State</th>
                   <th>Additional Refresh Queued</th>
                   <th>Local Address</th>
@@ -930,6 +931,7 @@
                   <th>Messages Received</th>
                   <th>Records Received</th>
                   <th>Bytes Received</th>
+                  <th>Transfer Rate (B/s)</th>
                 </tr>
               </thead>
               <tbody>
@@ -946,6 +948,7 @@
                     <td><xsl:value-of select="serial"/></td>
                     <td><xsl:value-of select="remoteserial"/></td>
                     <td><xsl:value-of select="ixfr"/></td>
+                    <td><xsl:value-of select="firstrefresh"/></td>
                     <td><xsl:value-of select="state"/></td>
                     <td><xsl:value-of select="refreshqueued"/></td>
                     <td><xsl:value-of select="localaddr"/></td>
@@ -957,6 +960,7 @@
                     <td><xsl:value-of select="nmsg"/></td>
                     <td><xsl:value-of select="nrecs"/></td>
                     <td><xsl:value-of select="nbytes"/></td>
+                    <td><xsl:value-of select="rate"/></td>
                   </tr>
                 </xsl:for-each>
               </tbody>

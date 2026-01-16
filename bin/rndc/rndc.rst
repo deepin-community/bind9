@@ -171,13 +171,20 @@ Currently supported commands are:
 
    See also :option:`rndc addzone` and :option:`rndc modzone`.
 
-.. option:: dnssec (-status | -rollover -key id [-alg algorithm] [-when time] | -checkds [-key id [-alg algorithm]] [-when time]  published | withdrawn)) zone [class [view]]
+.. option:: dnssec (-status | -step | -rollover -key id [-alg algorithm] [-when time] | -checkds [-key id [-alg algorithm]] [-when time]  published | withdrawn)) zone [class [view]]
 
    This command allows you to interact with the "dnssec-policy" of a given
    zone.
 
    ``rndc dnssec -status`` show the DNSSEC signing state for the specified
    zone.
+
+   ``rndc dnssec -step`` sends a signal to an instance of :iscman:`named` for a
+   zone configured with ``dnssec-policy`` in manual mode, telling it to
+   continue with the operations that had previously been blocked but logged.
+   This gives the human operator a chance to review the log messages,
+   understand what will happen next and then, using ``rndc dnssec -step``, to
+   inform :iscman:`named` to proceed to the next stage.
 
    ``rndc dnssec -rollover`` allows you to schedule key rollover for a
    specific key (overriding the original key lifetime).
@@ -257,6 +264,11 @@ Currently supported commands are:
 
    See also :option:`rndc stop`.
 
+.. option:: skr -import file zone [class [view]]
+
+   This command allows you to import a SKR file for the specified zone, to
+   support offline KSK signing.
+
 .. option:: loadkeys [zone [class [view]]]
 
    This command fetches all DNSSEC keys for the given zone from the key directory. If
@@ -307,6 +319,19 @@ Currently supported commands are:
       also be used, for example, to jumpstart the acquisition of new
       keys in the event of a trust anchor rollover, or as a brute-force
       repair for key maintenance problems.
+
+.. option:: memprof [(on | off | dump)]
+
+   This command controls memory profiling. To have any effect, :iscman:`named` must be
+   built with jemalloc, the library have profiling support enabled and run with the
+   ``prof:true`` allocator configuration. (either via ``MALLOC_CONF`` or ``/etc/malloc.conf``)
+
+   The ``prof_active:false`` option is recommended to ensure the profiling overhead does
+   not affect :iscman:`named` when not needed.
+
+   The ``on`` and ``off`` options will start and stop the jemalloc memory profiling respectively.
+   When run with the `dump` option, :iscman:`named` will dump the profile to the working
+   directory. The name will be chosen automatically by jemalloc.
 
 .. option:: modzone zone [class [view]] configuration
 
@@ -444,14 +469,34 @@ Currently supported commands are:
 
 .. program:: rndc
 
-.. option:: retransfer zone [class [view]]
+.. option:: reset-stats <counter-name ...>
+
+   This command resets the requested statistics counters.
+
+   At least one counter name must be provided. Currently the following counters
+   are supported: ``recursive-high-water``, ``tcp-high-water``.
+
+.. option:: responselog [on | off]
+
+   This command enables or disables response logging. For backward compatibility,
+   this command can also be used without an argument to toggle response logging
+   on and off.
+
+   Unlike query logging, response logging cannot be enabled by explicitly directing
+   the ``responses`` ``category`` to a ``channel`` in the ``logging`` section
+   of :iscman:`named.conf`, but it can still be enabled by specifying
+   ``responselog yes;`` in the ``options`` section of :iscman:`named.conf`.
+
+.. option:: retransfer [-force] zone [class [view]]
 
    This command retransfers the given secondary zone from the primary server.
 
    If the zone is configured to use ``inline-signing``, the signed
    version of the zone is discarded; after the retransfer of the
    unsigned version is complete, the signed version is regenerated
-   with new signatures.
+   with new signatures. With the optional ``-force`` argument provided
+   if there is an ongoing zone transfer it will be aborted before a new zone
+   transfer is scheduled.
 
 .. option:: scan
 

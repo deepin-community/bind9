@@ -325,6 +325,16 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
 n=$((n + 1))
+echo_i "test 'rndc dumpdb' with an unwritable dump-file ($n)"
+ret=0
+touch ns2/named_dump.db
+chmod -w ns2/named_dump.db
+rndc_dumpdb ns2 2>/dev/null && ret=1
+grep -F "failed: permission denied" "rndc.out.test$n" >/dev/null || ret=1
+if [ $ret != 0 ]; then echo_i "failed"; fi
+status=$((status + ret))
+
+n=$((n + 1))
 echo_i "test 'rndc dumpdb' on a empty cache ($n)"
 ret=0
 rndc_dumpdb ns3 || ret=1
@@ -436,7 +446,7 @@ n=$((n + 1))
 echo_i "testing automatic zones are reported ($n)"
 ret=0
 $RNDC -s 10.53.0.4 -p ${EXTRAPORT6} -c ns4/key6.conf status >rndc.out.1.test$n || ret=1
-grep "number of zones: 199 (198 automatic)" rndc.out.1.test$n >/dev/null || ret=1
+grep "number of zones: 201 (200 automatic)" rndc.out.1.test$n >/dev/null || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
@@ -552,8 +562,9 @@ status=$((status + ret))
 n=$((n + 1))
 echo_i "test 'rndc reconfig' with a broken config ($n)"
 ret=0
+nextpart ns4/named.run >/dev/null
 $RNDC -s 10.53.0.4 -p ${EXTRAPORT6} -c ns4/key6.conf reconfig >/dev/null || ret=1
-sleep 1
+wait_for_log 3 "running" ns4/named.run
 mv ns4/named.conf ns4/named.conf.save
 echo "error error error" >>ns4/named.conf
 $RNDC -s 10.53.0.4 -p ${EXTRAPORT6} -c ns4/key6.conf reconfig >rndc.out.1.test$n 2>&1 && ret=1
@@ -572,10 +583,11 @@ status=$((status + ret))
 n=$((n + 1))
 echo_i "restore working config ($n)"
 ret=0
+nextpart ns4/named.run >/dev/null
 mv ns4/named.conf.save ns4/named.conf
 sleep 1
 $RNDC -s 10.53.0.4 -p ${EXTRAPORT6} -c ns4/key6.conf reconfig >/dev/null || ret=1
-sleep 1
+wait_for_log 3 "running" ns4/named.run
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
@@ -624,7 +636,7 @@ status=$((status + ret))
 
 n=$((n + 1))
 echo_i "check if query for the zone returns SERVFAIL ($n)"
-$DIG @10.53.0.6 -p ${PORT} -t soa huge.zone >dig.out.1.test$n
+$DIG @10.53.0.6 -p ${PORT} -t soa huge.zone >dig.out.1.test$n || ret=1
 grep "SERVFAIL" dig.out.1.test$n >/dev/null || ret=1
 if [ $ret != 0 ]; then
   echo_i "failed (ignored)"
@@ -640,7 +652,7 @@ status=$((status + ret))
 
 n=$((n + 1))
 echo_i "check if query for the zone returns NOERROR ($n)"
-$DIG @10.53.0.6 -p ${PORT} -t soa huge.zone >dig.out.1.test$n
+$DIG @10.53.0.6 -p ${PORT} -t soa huge.zone >dig.out.1.test$n || ret=1
 grep "NOERROR" dig.out.1.test$n >/dev/null || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))

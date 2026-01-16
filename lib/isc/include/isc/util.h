@@ -79,6 +79,8 @@
 
 #define ISC_CLAMP(v, x, y) ((v) < (x) ? (x) : ((v) > (y) ? (y) : (v)))
 
+#define ISC_MAX3(a, b, c) ISC_MAX(ISC_MAX((a), (b)), (c))
+
 /*%
  * The UNCONST() macro can be used to omit warnings produced by certain
  * compilers when operating with pointers declared with the const type qual-
@@ -395,9 +397,9 @@ mock_assert(const int result, const char *const expression,
  * Alignment
  */
 #ifdef __GNUC__
-#define ISC_ALIGN(x, a) (((x) + (a)-1) & ~((typeof(x))(a)-1))
+#define ISC_ALIGN(x, a) (((x) + (a) - 1) & ~((typeof(x))(a) - 1))
 #else /* ifdef __GNUC__ */
-#define ISC_ALIGN(x, a) (((x) + (a)-1) & ~((uintmax_t)(a)-1))
+#define ISC_ALIGN(x, a) (((x) + (a) - 1) & ~((uintmax_t)(a) - 1))
 #endif /* ifdef __GNUC__ */
 
 /*%

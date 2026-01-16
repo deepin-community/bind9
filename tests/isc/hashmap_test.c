@@ -46,7 +46,7 @@ static bool
 nodes_match(void *node0, const void *key) {
 	struct test_node *node = node0;
 
-	return (memcmp(node->key, key, 16) == 0);
+	return memcmp(node->key, key, 16) == 0;
 }
 
 static bool
@@ -54,14 +54,14 @@ long_nodes_match(void *node0, const void *key) {
 	struct test_node *node = node0;
 	size_t len = strlen(key);
 
-	return (memcmp(node->key, key, len) == 0);
+	return memcmp(node->key, key, len) == 0;
 }
 
 static bool
 upper_nodes_match(void *node0, const void *key) {
 	struct test_node *node = node0;
 
-	return (isc_ascii_lowerequal((uint8_t *)node->key, key, 16));
+	return isc_ascii_lowerequal((uint8_t *)node->key, key, 16);
 }
 
 static void
@@ -216,8 +216,10 @@ test_hashmap_full(uint8_t init_bits, uintptr_t count) {
 	isc_mem_cput(mctx, upper_nodes, count, sizeof(nodes[0]));
 }
 
+#include "hashmap_nodes.h"
+
 static void
-test_hashmap_iterator(void) {
+test_hashmap_iterator(bool random_data) {
 	isc_hashmap_t *hashmap = NULL;
 	isc_result_t result;
 	isc_hashmap_iter_t *iter = NULL;
@@ -235,7 +237,11 @@ test_hashmap_iterator(void) {
 		/* short keys */
 		snprintf((char *)nodes[i].key, 16, "%u", (unsigned int)i);
 		strlcat((char *)nodes[i].key, " key of a raw hashmap!!", 16);
-		nodes[i].hashval = isc_hash32(nodes[i].key, 16, true);
+		if (random_data) {
+			nodes[i].hashval = isc_hash32(nodes[i].key, 16, true);
+		} else {
+			nodes[i].hashval = test_hashvals[i];
+		}
 	}
 
 	for (size_t i = 0; i < count; i++) {
@@ -387,7 +393,12 @@ ISC_RUN_TEST_IMPL(isc_hashmap_8_20000) {
 /* test hashmap iterator */
 
 ISC_RUN_TEST_IMPL(isc_hashmap_iterator) {
-	test_hashmap_iterator();
+	test_hashmap_iterator(true);
+	return;
+}
+
+ISC_RUN_TEST_IMPL(isc_hashmap_iterator_static) {
+	test_hashmap_iterator(false);
 	return;
 }
 
@@ -420,7 +431,7 @@ case_match(void *node0, const void *key) {
 	struct test_node *node = node0;
 	size_t len = strlen(key);
 
-	return (memcmp(node->key, key, len) == 0);
+	return memcmp(node->key, key, len) == 0;
 }
 
 static bool
@@ -428,7 +439,7 @@ nocase_match(void *node0, const void *key) {
 	struct test_node *node = node0;
 	size_t len = strlen(key);
 
-	return (isc_ascii_lowerequal((uint8_t *)node->key, key, len));
+	return isc_ascii_lowerequal((uint8_t *)node->key, key, len);
 }
 
 ISC_RUN_TEST_IMPL(isc_hashmap_case) {
@@ -500,6 +511,7 @@ ISC_TEST_ENTRY(isc_hashmap_24_200000)
 ISC_TEST_ENTRY(isc_hashmap_1_48000)
 ISC_TEST_ENTRY(isc_hashmap_8_20000)
 ISC_TEST_ENTRY(isc_hashmap_iterator)
+ISC_TEST_ENTRY(isc_hashmap_iterator_static)
 ISC_TEST_LIST_END
 
 ISC_TEST_MAIN

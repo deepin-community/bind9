@@ -138,12 +138,12 @@ static isc_nm_t **nm = NULL;
 static isc_nm_proxy_type_t
 get_proxy_type(void) {
 	if (!atomic_load(&use_PROXY)) {
-		return (ISC_NM_PROXY_NONE);
+		return ISC_NM_PROXY_NONE;
 	} else if (atomic_load(&use_TLS) && atomic_load(&use_PROXY_over_TLS)) {
-		return (ISC_NM_PROXY_ENCRYPTED);
+		return ISC_NM_PROXY_ENCRYPTED;
 	}
 
-	return (ISC_NM_PROXY_PLAIN);
+	return ISC_NM_PROXY_PLAIN;
 }
 
 static void
@@ -213,7 +213,7 @@ connect_send_request(isc_nm_t *mgr, const char *uri, bool post,
 	}
 
 	isc_nm_httpconnect(mgr, NULL, &tcp_listen_addr, uri, post,
-			   connect_send_cb, data, ctx, client_sess_cache,
+			   connect_send_cb, data, ctx, NULL, client_sess_cache,
 			   timeout, get_proxy_type(), NULL);
 }
 
@@ -229,7 +229,7 @@ setup_ephemeral_port(isc_sockaddr_t *addr, sa_family_t family) {
 	fd = socket(AF_INET6, family, 0);
 	if (fd < 0) {
 		perror("setup_ephemeral_port: socket()");
-		return (-1);
+		return -1;
 	}
 
 	r = bind(fd, (const struct sockaddr *)&addr->type.sa,
@@ -237,23 +237,23 @@ setup_ephemeral_port(isc_sockaddr_t *addr, sa_family_t family) {
 	if (r != 0) {
 		perror("setup_ephemeral_port: bind()");
 		isc__nm_closesocket(fd);
-		return (r);
+		return r;
 	}
 
 	r = getsockname(fd, (struct sockaddr *)&addr->type.sa, &addrlen);
 	if (r != 0) {
 		perror("setup_ephemeral_port: getsockname()");
 		isc__nm_closesocket(fd);
-		return (r);
+		return r;
 	}
 
-	result = isc__nm_socket_reuse(fd);
+	result = isc__nm_socket_reuse(fd, 1);
 	if (result != ISC_R_SUCCESS && result != ISC_R_NOTIMPLEMENTED) {
 		fprintf(stderr,
 			"setup_ephemeral_port: isc__nm_socket_reuse(): %s",
 			isc_result_totext(result));
 		close(fd);
-		return (-1);
+		return -1;
 	}
 
 	result = isc__nm_socket_reuse_lb(fd);
@@ -262,7 +262,7 @@ setup_ephemeral_port(isc_sockaddr_t *addr, sa_family_t family) {
 			"setup_ephemeral_port: isc__nm_socket_reuse_lb(): %s",
 			isc_result_totext(result));
 		close(fd);
-		return (-1);
+		return -1;
 	}
 
 #if IPV6_RECVERR
@@ -273,11 +273,11 @@ setup_ephemeral_port(isc_sockaddr_t *addr, sa_family_t family) {
 	if (r != 0) {
 		perror("setup_ephemeral_port");
 		close(fd);
-		return (r);
+		return r;
 	}
 #endif
 
-	return (fd);
+	return fd;
 }
 
 /* Generic */
@@ -302,7 +302,7 @@ setup_test(void **state) {
 	tcp_listen_addr = (isc_sockaddr_t){ .length = 0 };
 	tcp_listen_sock = setup_ephemeral_port(&tcp_listen_addr, SOCK_STREAM);
 	if (tcp_listen_sock < 0) {
-		return (-1);
+		return -1;
 	}
 	close(tcp_listen_sock);
 	tcp_listen_sock = -1;
@@ -341,7 +341,7 @@ setup_test(void **state) {
 	isc_nonce_buf(&send_magic, sizeof(send_magic));
 	isc_nonce_buf(&stop_magic, sizeof(stop_magic));
 	if (send_magic == stop_magic) {
-		return (-1);
+		return -1;
 	}
 
 	setup_loopmgr(state);
@@ -371,7 +371,7 @@ setup_test(void **state) {
 
 	*state = nm;
 
-	return (0);
+	return 0;
 }
 
 static int
@@ -397,7 +397,7 @@ teardown_test(void **state ISC_ATTR_UNUSED) {
 
 	isc_nm_http_endpoints_detach(&endpoints);
 
-	return (0);
+	return 0;
 }
 
 thread_local size_t nwrites = NWRITES;
@@ -416,7 +416,7 @@ init_listener_quota(size_t nthreads) {
 		isc_quota_max(&listener_quota, max_quota);
 		quotap = &listener_quota;
 	}
-	return (quotap);
+	return quotap;
 }
 
 static void
@@ -698,14 +698,14 @@ doh_timeout_recovery(void *arg ISC_ATTR_UNUSED) {
 			ISC_NM_HTTP_DEFAULT_PATH);
 	isc_nm_httpconnect(connect_nm, NULL, &tcp_listen_addr, req_url,
 			   atomic_load(&POST), timeout_request_cb, NULL, ctx,
-			   client_sess_cache, T_CONNECT, get_proxy_type(),
+			   NULL, client_sess_cache, T_CONNECT, get_proxy_type(),
 			   NULL);
 }
 
 static int
 doh_timeout_recovery_teardown(void **state) {
 	assert_true(atomic_load(&ctimeouts) == 5);
-	return (teardown_test(state));
+	return teardown_test(state);
 }
 
 ISC_LOOP_TEST_IMPL(doh_timeout_recovery_POST) {
@@ -751,7 +751,7 @@ doh_receive_send_reply_cb(isc_nmhandle_t *handle, isc_result_t eresult,
 			assert_true(eresult == ISC_R_SUCCESS);
 		}
 
-		isc_async_current(loopmgr, doh_connect_thread, connect_nm);
+		isc_async_current(doh_connect_thread, connect_nm);
 	}
 	if (sends <= 0) {
 		isc_loopmgr_shutdown(loopmgr);
@@ -835,7 +835,7 @@ doh_recv_one_teardown(void **state) {
 	assert_int_equal(atomic_load(&sreads), 1);
 	assert_int_equal(atomic_load(&ssends), 1);
 
-	return (teardown_test(state));
+	return teardown_test(state);
 }
 
 ISC_LOOP_TEST_IMPL(doh_recv_one_POST) {
@@ -947,8 +947,8 @@ doh_recv_two(void *arg ISC_ATTR_UNUSED) {
 
 	isc_nm_httpconnect(connect_nm, NULL, &tcp_listen_addr, req_url,
 			   atomic_load(&POST), doh_connect_send_two_requests_cb,
-			   NULL, ctx, client_sess_cache, 5000, get_proxy_type(),
-			   NULL);
+			   NULL, ctx, NULL, client_sess_cache, 5000,
+			   get_proxy_type(), NULL);
 
 	isc_loop_teardown(mainloop, listen_sock_close, listen_sock);
 }
@@ -966,7 +966,7 @@ doh_recv_two_teardown(void **state) {
 	assert_int_equal(atomic_load(&sreads), 2);
 	assert_int_equal(atomic_load(&ssends), 2);
 
-	return (teardown_test(state));
+	return teardown_test(state);
 }
 
 ISC_LOOP_TEST_IMPL(doh_recv_two_POST) {
@@ -1062,7 +1062,7 @@ doh_recv_send_teardown(void **state) {
 	CHECK_RANGE_FULL(sreads);
 	CHECK_RANGE_FULL(ssends);
 
-	return (res);
+	return res;
 }
 
 ISC_LOOP_TEST_IMPL(doh_recv_send_POST) {
@@ -1127,7 +1127,7 @@ doh_bad_connect_uri_teardown(void **state) {
 	assert_int_equal(atomic_load(&sreads), 0);
 	assert_int_equal(atomic_load(&ssends), 0);
 
-	return (teardown_test(state));
+	return teardown_test(state);
 }
 
 /* See: GL #2858, !5319 */

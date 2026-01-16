@@ -55,20 +55,7 @@ named_tkeyctx_fromconfig(const cfg_obj_t *options, isc_mem_t *mctx,
 
 	result = dns_tkeyctx_create(mctx, &tctx);
 	if (result != ISC_R_SUCCESS) {
-		return (result);
-	}
-
-	obj = NULL;
-	result = cfg_map_get(options, "tkey-domain", &obj);
-	if (result == ISC_R_SUCCESS) {
-		s = cfg_obj_asstring(obj);
-		isc_buffer_constinit(&b, s, strlen(s));
-		isc_buffer_add(&b, strlen(s));
-		name = dns_fixedname_initname(&fname);
-		RETERR(dns_name_fromtext(name, &b, dns_rootname, 0, NULL));
-		tctx->domain = isc_mem_get(mctx, sizeof(dns_name_t));
-		dns_name_init(tctx->domain, NULL);
-		dns_name_dup(name, mctx, tctx->domain);
+		return result;
 	}
 
 	obj = NULL;
@@ -91,9 +78,9 @@ named_tkeyctx_fromconfig(const cfg_obj_t *options, isc_mem_t *mctx,
 	}
 
 	*tctxp = tctx;
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 
 failure:
 	dns_tkeyctx_destroy(&tctx);
-	return (result);
+	return result;
 }

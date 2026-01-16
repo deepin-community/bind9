@@ -121,15 +121,15 @@ struct dns_adbfind {
 	ISC_LINK(dns_adbfind_t) publink;      /*%< RW: client use */
 
 	/* Private */
-	isc_mutex_t	lock; /* locks all below */
-	in_port_t	port;
-	unsigned int	flags;
-	dns_adbname_t  *adbname;
-	dns_adb_t      *adb;
-	isc_loop_t     *loop;
-	dns_adbstatus_t status;
-	isc_job_cb	cb;
-	void	       *cbarg;
+	isc_mutex_t		 lock; /* locks all below */
+	in_port_t		 port;
+	unsigned int		 flags;
+	dns_adbname_t		*adbname;
+	dns_adb_t		*adb;
+	isc_loop_t		*loop;
+	_Atomic(dns_adbstatus_t) status;
+	isc_job_cb		 cb;
+	void			*cbarg;
 	ISC_LINK(dns_adbfind_t) plink;
 };
 
@@ -180,6 +180,10 @@ struct dns_adbfind {
  */
 #define DNS_ADBFIND_STARTATZONE 0x00000020
 /*%
+ *	Fetches will be exempted from the quota.
+ */
+#define DNS_ADBFIND_QUOTAEXEMPT 0x00000040
+/*%
  *      The server's fetch quota is exceeded; it will be treated as
  *      lame for this query.
  */
@@ -188,6 +192,10 @@ struct dns_adbfind {
  *	Don't perform a fetch even if there are no address records available.
  */
 #define DNS_ADBFIND_NOFETCH 0x00000800
+/*%
+ *	Only look for glue record for static stub.
+ */
+#define DNS_ADBFIND_STATICSTUB 0x00001000
 
 /*%
  * The answers to queries come back as a list of these.
@@ -225,12 +233,11 @@ struct dns_adbaddrinfo {
  */
 
 /****
-**** FUNCTIONS
-****/
+ **** FUNCTIONS
+ ****/
 
 void
-dns_adb_create(isc_mem_t *mem, dns_view_t *view, isc_loopmgr_t *loopmgr,
-	       dns_adb_t **newadb);
+dns_adb_create(isc_mem_t *mem, dns_view_t *view, dns_adb_t **newadb);
 /*%<
  * Create a new ADB.
  *
@@ -244,8 +251,6 @@ dns_adb_create(isc_mem_t *mem, dns_view_t *view, isc_loopmgr_t *loopmgr,
  *\li	'mem' must be a valid memory context.
  *
  *\li	'view' be a pointer to a valid view.
- *
- *\li	'loopmgr' be a valid loop manager.
  *
  *\li	'newadb' != NULL && '*newadb' == NULL.
  */
@@ -276,7 +281,8 @@ dns_adb_createfind(dns_adb_t *adb, isc_loop_t *loop, isc_job_cb cb, void *cbarg,
 		   const dns_name_t *name, const dns_name_t *qname,
 		   dns_rdatatype_t qtype, unsigned int options,
 		   isc_stdtime_t now, dns_name_t *target, in_port_t port,
-		   unsigned int depth, isc_counter_t *qc, dns_adbfind_t **find);
+		   unsigned int depth, isc_counter_t *qc, isc_counter_t *gqc,
+		   dns_adbfind_t **find);
 /*%<
  * Main interface for clients. The adb will look up the name given in
  * "name" and will build up a list of found addresses, and perhaps start
@@ -384,6 +390,16 @@ dns_adbfind_done(dns_adbfind_t find);
  * Requires:
  *
  *\li	'find' != NULL and *find be valid dns_adbfind_t pointer.
+ */
+
+unsigned int
+dns_adb_findstatus(dns_adbfind_t *);
+/*%<
+ * Returns the status field of the find.
+ *
+ * Requires:
+ *
+ *\li	'find' be a valid dns_adbfind_t pointer.
  */
 
 void
