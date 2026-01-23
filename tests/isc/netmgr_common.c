@@ -195,10 +195,10 @@ setup_netmgr_test(void **state) {
 	if (isc_tlsctx_createserver(NULL, NULL, &tcp_listen_tlsctx) !=
 	    ISC_R_SUCCESS)
 	{
-		return (-1);
+		return -1;
 	}
 	if (isc_tlsctx_createclient(&tcp_connect_tlsctx) != ISC_R_SUCCESS) {
-		return (-1);
+		return -1;
 	}
 
 	isc_tlsctx_enable_dot_client_alpn(tcp_connect_tlsctx);
@@ -208,7 +208,7 @@ setup_netmgr_test(void **state) {
 		ISC_TLSCTX_CLIENT_SESSION_CACHE_DEFAULT_SIZE,
 		&tcp_tlsctx_client_sess_cache);
 
-	return (0);
+	return 0;
 }
 
 int
@@ -236,7 +236,7 @@ teardown_netmgr_test(void **state ISC_ATTR_UNUSED) {
 
 	proxy_info = NULL;
 
-	return (0);
+	return 0;
 }
 
 void
@@ -265,7 +265,7 @@ noop_accept_cb(isc_nmhandle_t *handle ISC_ATTR_UNUSED, isc_result_t eresult,
 		(void)atomic_fetch_add(&saccepts, 1);
 	}
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 void
@@ -388,10 +388,10 @@ connect_connect_cb(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 	if (have_expected_cconnects(atomic_fetch_add(&cconnects, 1) + 1)) {
 		do_cconnects_shutdown(loopmgr);
 	} else if (do_send) {
-		isc_async_current(loopmgr, stream_recv_send_connect,
-				  (cbarg == NULL
-					   ? get_stream_connect_function()
-					   : (stream_connect_function)cbarg));
+		isc_async_current(stream_recv_send_connect,
+				  cbarg == NULL
+					  ? get_stream_connect_function()
+					  : (stream_connect_function)cbarg);
 	}
 
 	isc_refcount_increment0(&active_creads);
@@ -495,7 +495,7 @@ listen_accept_cb(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 	F();
 
 	if (eresult != ISC_R_SUCCESS) {
-		return (eresult);
+		return eresult;
 	}
 
 	if (have_expected_saccepts(atomic_fetch_add(&saccepts, 1) + 1)) {
@@ -505,7 +505,7 @@ listen_accept_cb(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 	isc_nmhandle_attach(handle, &(isc_nmhandle_t *){ NULL });
 	isc_refcount_increment0(&active_sreads);
 
-	return (eresult);
+	return eresult;
 }
 
 isc_result_t
@@ -517,7 +517,7 @@ stream_accept_cb(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 	F();
 
 	if (eresult != ISC_R_SUCCESS) {
-		return (eresult);
+		return eresult;
 	}
 
 	if (have_expected_saccepts(atomic_fetch_add(&saccepts, 1) + 1)) {
@@ -534,7 +534,7 @@ stream_accept_cb(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 	isc_nmhandle_attach(handle, &readhandle);
 	isc_nm_read(handle, listen_read_cb, readhandle);
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 void
@@ -583,7 +583,7 @@ tcp_listener_init_quota(size_t nthreads) {
 		isc_quota_max(&listener_quota, max_quota);
 		quotap = &listener_quota;
 	}
-	return (quotap);
+	return quotap;
 }
 
 static void
@@ -595,7 +595,7 @@ tcp_connect(isc_nm_t *nm) {
 static void
 tls_connect(isc_nm_t *nm) {
 	isc_nm_tlsconnect(nm, &tcp_connect_addr, &tcp_listen_addr,
-			  connect_connect_cb, NULL, tcp_connect_tlsctx,
+			  connect_connect_cb, NULL, tcp_connect_tlsctx, NULL,
 			  tcp_tlsctx_client_sess_cache, T_CONNECT,
 			  stream_use_PROXY, NULL);
 }
@@ -608,7 +608,7 @@ set_proxyheader_info(isc_nm_proxyheader_info_t *pi) {
 isc_nm_proxyheader_info_t *
 get_proxyheader_info(void) {
 	if (proxy_info != NULL) {
-		return (proxy_info);
+		return proxy_info;
 	}
 
 	/*
@@ -616,10 +616,10 @@ get_proxyheader_info(void) {
 	 * too.
 	 */
 	if (isc_random_uniform(2)) {
-		return (&proxy_info_data);
+		return &proxy_info_data;
 	}
 
-	return (NULL);
+	return NULL;
 }
 
 static void
@@ -631,17 +631,17 @@ proxystream_connect(isc_nm_t *nm) {
 
 	isc_nm_proxystreamconnect(nm, &tcp_connect_addr, &tcp_listen_addr,
 				  connect_connect_cb, NULL, T_CONNECT, tlsctx,
-				  sess_cache, get_proxyheader_info());
+				  NULL, sess_cache, get_proxyheader_info());
 }
 
 stream_connect_function
 get_stream_connect_function(void) {
 	if (stream_use_TLS && !stream_PROXY_over_TLS) {
-		return (tls_connect);
+		return tls_connect;
 	} else if (stream_use_PROXY) {
-		return (proxystream_connect);
+		return proxystream_connect;
 	} else {
-		return (tcp_connect);
+		return tcp_connect;
 	}
 
 	UNREACHABLE();
@@ -657,19 +657,19 @@ stream_listen(isc_nm_accept_cb_t accept_cb, void *accept_cbarg, int backlog,
 			listen_nm, ISC_NM_LISTEN_ALL, &tcp_listen_addr,
 			accept_cb, accept_cbarg, backlog, quota,
 			tcp_listen_tlsctx, stream_use_PROXY, sockp);
-		return (result);
+		return result;
 	} else if (stream_use_PROXY) {
 		isc_tlsctx_t *tlsctx = stream_PROXY_over_TLS ? tcp_listen_tlsctx
 							     : NULL;
 		result = isc_nm_listenproxystream(
 			listen_nm, ISC_NM_LISTEN_ALL, &tcp_listen_addr,
 			accept_cb, accept_cbarg, backlog, quota, tlsctx, sockp);
-		return (result);
+		return result;
 	} else {
 		result = isc_nm_listentcp(listen_nm, ISC_NM_LISTEN_ALL,
 					  &tcp_listen_addr, accept_cb,
 					  accept_cbarg, backlog, quota, sockp);
-		return (result);
+		return result;
 	}
 
 	UNREACHABLE();
@@ -680,10 +680,11 @@ stream_connect(isc_nm_cb_t cb, void *cbarg, unsigned int timeout) {
 	isc_refcount_increment0(&active_cconnects);
 
 	if (stream_use_TLS && !stream_PROXY_over_TLS) {
-		isc_nm_tlsconnect(
-			connect_nm, &tcp_connect_addr, &tcp_listen_addr, cb,
-			cbarg, tcp_connect_tlsctx, tcp_tlsctx_client_sess_cache,
-			timeout, stream_use_PROXY, NULL);
+		isc_nm_tlsconnect(connect_nm, &tcp_connect_addr,
+				  &tcp_listen_addr, cb, cbarg,
+				  tcp_connect_tlsctx, NULL,
+				  tcp_tlsctx_client_sess_cache, timeout,
+				  stream_use_PROXY, NULL);
 		return;
 	} else if (stream_use_PROXY) {
 		isc_tlsctx_t *tlsctx = stream_PROXY_over_TLS
@@ -694,7 +695,7 @@ stream_connect(isc_nm_cb_t cb, void *cbarg, unsigned int timeout) {
 					      : NULL;
 		isc_nm_proxystreamconnect(connect_nm, &tcp_connect_addr,
 					  &tcp_listen_addr, cb, cbarg, timeout,
-					  tlsctx, sess_cache,
+					  tlsctx, NULL, sess_cache,
 					  get_proxyheader_info());
 		return;
 	} else {
@@ -708,12 +709,12 @@ stream_connect(isc_nm_cb_t cb, void *cbarg, unsigned int timeout) {
 isc_nm_proxy_type_t
 get_proxy_type(void) {
 	if (!stream_use_PROXY) {
-		return (ISC_NM_PROXY_NONE);
+		return ISC_NM_PROXY_NONE;
 	} else if (stream_PROXY_over_TLS) {
-		return (ISC_NM_PROXY_ENCRYPTED);
+		return ISC_NM_PROXY_ENCRYPTED;
 	}
 
-	return (ISC_NM_PROXY_PLAIN);
+	return ISC_NM_PROXY_PLAIN;
 }
 
 void
@@ -736,19 +737,19 @@ int
 stream_noop_setup(void **state ISC_ATTR_UNUSED) {
 	int r = setup_netmgr_test(state);
 	expected_cconnects = 1;
-	return (r);
+	return r;
 }
 
 int
 proxystream_noop_setup(void **state) {
 	stream_use_PROXY = true;
-	return (stream_noop_setup(state));
+	return stream_noop_setup(state);
 }
 
 int
 proxystreamtls_noop_setup(void **state) {
 	stream_PROXY_over_TLS = true;
-	return (proxystream_noop_setup(state));
+	return proxystream_noop_setup(state);
 }
 
 void
@@ -770,7 +771,7 @@ stream_noop_teardown(void **state ISC_ATTR_UNUSED) {
 	atomic_assert_int_eq(creads, 0);
 	atomic_assert_int_eq(sreads, 0);
 	atomic_assert_int_eq(ssends, 0);
-	return (teardown_netmgr_test(state));
+	return teardown_netmgr_test(state);
 }
 
 int
@@ -778,7 +779,7 @@ proxystream_noop_teardown(void **state) {
 	int r = stream_noop_teardown(state);
 	stream_use_PROXY = false;
 
-	return (r);
+	return r;
 }
 
 int
@@ -786,7 +787,7 @@ proxystreamtls_noop_teardown(void **state) {
 	int r = proxystream_noop_teardown(state);
 	stream_PROXY_over_TLS = false;
 
-	return (r);
+	return r;
 }
 
 static void
@@ -851,33 +852,33 @@ stream_noresponse_setup(void **state ISC_ATTR_UNUSED) {
 	int r = setup_netmgr_test(state);
 	expected_cconnects = 1;
 	expected_saccepts = 1;
-	return (r);
+	return r;
 }
 
 int
 proxystream_noresponse_setup(void **state) {
 	stream_use_PROXY = true;
-	return (stream_noresponse_setup(state));
+	return stream_noresponse_setup(state);
 }
 
 int
 proxystream_noresponse_teardown(void **state) {
 	int r = stream_noresponse_teardown(state);
 	stream_use_PROXY = false;
-	return (r);
+	return r;
 }
 
 int
 proxystreamtls_noresponse_setup(void **state) {
 	stream_PROXY_over_TLS = true;
-	return (proxystream_noresponse_setup(state));
+	return proxystream_noresponse_setup(state);
 }
 
 int
 proxystreamtls_noresponse_teardown(void **state) {
 	int r = proxystream_noresponse_teardown(state);
 	stream_PROXY_over_TLS = false;
-	return (r);
+	return r;
 }
 
 void
@@ -904,7 +905,7 @@ stream_noresponse_teardown(void **state ISC_ATTR_UNUSED) {
 	atomic_assert_int_eq(sreads, 0);
 	atomic_assert_int_eq(ssends, 0);
 
-	return (teardown_netmgr_test(state));
+	return teardown_netmgr_test(state);
 }
 
 int
@@ -917,7 +918,7 @@ stream_timeout_recovery_setup(void **state ISC_ATTR_UNUSED) {
 	expected_sreads = 5;
 	sreads_shutdown = true;
 
-	return (r);
+	return r;
 }
 
 typedef struct proxy_addrs {
@@ -986,27 +987,27 @@ proxy_verify_endpoints(isc_nmhandle_t *handle) {
 int
 proxystream_timeout_recovery_setup(void **state) {
 	stream_use_PROXY = true;
-	return (stream_timeout_recovery_setup(state));
+	return stream_timeout_recovery_setup(state);
 }
 
 int
 proxystream_timeout_recovery_teardown(void **state) {
 	int r = stream_timeout_recovery_teardown(state);
 	stream_use_PROXY = false;
-	return (r);
+	return r;
 }
 
 int
 proxystreamtls_timeout_recovery_setup(void **state) {
 	stream_PROXY_over_TLS = true;
-	return (proxystream_timeout_recovery_setup(state));
+	return proxystream_timeout_recovery_setup(state);
 }
 
 int
 proxystreamtls_timeout_recovery_teardown(void **state) {
 	int r = proxystream_timeout_recovery_teardown(state);
 	stream_PROXY_over_TLS = false;
-	return (r);
+	return r;
 }
 
 void
@@ -1033,7 +1034,7 @@ stream_timeout_recovery(void **state ISC_ATTR_UNUSED) {
 int
 stream_timeout_recovery_teardown(void **state ISC_ATTR_UNUSED) {
 	atomic_assert_int_eq(ctimeouts, expected_ctimeouts);
-	return (teardown_netmgr_test(state));
+	return teardown_netmgr_test(state);
 }
 
 int
@@ -1058,33 +1059,33 @@ stream_recv_one_setup(void **state ISC_ATTR_UNUSED) {
 	expected_creads = 1;
 	creads_shutdown = true;
 
-	return (r);
+	return r;
 }
 
 int
 proxystream_recv_one_setup(void **state) {
 	stream_use_PROXY = true;
-	return (stream_recv_one_setup(state));
+	return stream_recv_one_setup(state);
 }
 
 int
 proxystream_recv_one_teardown(void **state) {
 	int r = stream_recv_one_teardown(state);
 	stream_use_PROXY = false;
-	return (r);
+	return r;
 }
 
 int
 proxystreamtls_recv_one_setup(void **state) {
 	stream_PROXY_over_TLS = true;
-	return (proxystream_recv_one_setup(state));
+	return proxystream_recv_one_setup(state);
 }
 
 int
 proxystreamtls_recv_one_teardown(void **state) {
 	int r = proxystream_recv_one_teardown(state);
 	stream_PROXY_over_TLS = false;
-	return (r);
+	return r;
 }
 
 void
@@ -1111,7 +1112,7 @@ stream_recv_one_teardown(void **state ISC_ATTR_UNUSED) {
 	atomic_assert_int_eq(ssends, expected_ssends);
 	atomic_assert_int_eq(creads, expected_creads);
 
-	return (teardown_netmgr_test(state));
+	return teardown_netmgr_test(state);
 }
 
 int
@@ -1136,33 +1137,33 @@ stream_recv_two_setup(void **state ISC_ATTR_UNUSED) {
 	expected_creads = 2;
 	creads_shutdown = true;
 
-	return (r);
+	return r;
 }
 
 int
 proxystream_recv_two_setup(void **state) {
 	stream_use_PROXY = true;
-	return (stream_recv_two_setup(state));
+	return stream_recv_two_setup(state);
 }
 
 int
 proxystream_recv_two_teardown(void **state) {
 	int r = stream_recv_two_teardown(state);
 	stream_use_PROXY = false;
-	return (r);
+	return r;
 }
 
 int
 proxystreamtls_recv_two_setup(void **state) {
 	stream_PROXY_over_TLS = true;
-	return (proxystream_recv_two_setup(state));
+	return proxystream_recv_two_setup(state);
 }
 
 int
 proxystreamtls_recv_two_teardown(void **state) {
 	int r = proxystream_recv_two_teardown(state);
 	stream_PROXY_over_TLS = false;
-	return (r);
+	return r;
 }
 
 void
@@ -1191,7 +1192,7 @@ stream_recv_two_teardown(void **state ISC_ATTR_UNUSED) {
 	atomic_assert_int_eq(ssends, expected_ssends);
 	atomic_assert_int_eq(creads, expected_creads);
 
-	return (teardown_netmgr_test(state));
+	return teardown_netmgr_test(state);
 }
 
 int
@@ -1202,33 +1203,33 @@ stream_recv_send_setup(void **state ISC_ATTR_UNUSED) {
 	nsends = expected_creads = workers;
 	do_send = true;
 
-	return (r);
+	return r;
 }
 
 int
 proxystream_recv_send_setup(void **state) {
 	stream_use_PROXY = true;
-	return (stream_recv_send_setup(state));
+	return stream_recv_send_setup(state);
 }
 
 int
 proxystream_recv_send_teardown(void **state) {
 	int r = stream_recv_send_teardown(state);
 	stream_use_PROXY = false;
-	return (r);
+	return r;
 }
 
 int
 proxystreamtls_recv_send_setup(void **state) {
 	stream_PROXY_over_TLS = true;
-	return (proxystream_recv_send_setup(state));
+	return proxystream_recv_send_setup(state);
 }
 
 int
 proxystreamtls_recv_send_teardown(void **state) {
 	int r = proxystream_recv_send_teardown(state);
 	stream_PROXY_over_TLS = false;
-	return (r);
+	return r;
 }
 
 void
@@ -1261,7 +1262,7 @@ stream_recv_send_teardown(void **state ISC_ATTR_UNUSED) {
 	CHECK_RANGE_FULL(sreads);
 	CHECK_RANGE_FULL(ssends);
 
-	return (teardown_netmgr_test(state));
+	return teardown_netmgr_test(state);
 }
 
 int
@@ -1308,7 +1309,7 @@ setup_udp_test(void **state) {
 
 	connect_readcb = connect_read_cb;
 
-	return (0);
+	return 0;
 }
 
 int
@@ -1324,7 +1325,7 @@ teardown_udp_test(void **state) {
 	teardown_netmgr(state);
 	teardown_loopmgr(state);
 
-	return (0);
+	return 0;
 }
 
 static void
@@ -1477,7 +1478,7 @@ udp__connect_cb(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 		{
 			do_cconnects_shutdown(loopmgr);
 		} else if (do_send) {
-			isc_async_current(loopmgr, udp_enqueue_connect, cbarg);
+			isc_async_current(udp_enqueue_connect, cbarg);
 		}
 
 		isc_refcount_increment0(&active_creads);
@@ -1511,14 +1512,14 @@ udp_noop_setup(void **state) {
 	setup_udp_test(state);
 	expected_cconnects = 1;
 	cconnects_shutdown = true;
-	return (0);
+	return 0;
 }
 
 int
 udp_noop_teardown(void **state) {
 	atomic_assert_int_eq(cconnects, 1);
 	teardown_udp_test(state);
-	return (0);
+	return 0;
 }
 
 void
@@ -1541,14 +1542,14 @@ udp_noop(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_noop_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_noop_setup(state));
+	return udp_noop_setup(state);
 }
 
 int
 proxyudp_noop_teardown(void **state) {
 	int ret = udp_noop_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 static void
@@ -1619,14 +1620,14 @@ int
 udp_noresponse_setup(void **state) {
 	setup_udp_test(state);
 	expected_csends = 1;
-	return (0);
+	return 0;
 }
 
 int
 udp_noresponse_teardown(void **state) {
 	atomic_assert_int_eq(csends, expected_csends);
 	teardown_udp_test(state);
-	return (0);
+	return 0;
 }
 
 void
@@ -1640,14 +1641,14 @@ udp_noresponse(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_noresponse_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_noresponse_setup(state));
+	return udp_noresponse_setup(state);
 }
 
 int
 proxyudp_noresponse_teardown(void **state) {
 	int ret = udp_noresponse_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 static void
@@ -1759,7 +1760,7 @@ udp_timeout_recovery_setup(void **state) {
 	expected_csends = 1;
 	expected_creads = 1;
 	expected_ctimeouts = 4;
-	return (0);
+	return 0;
 }
 
 int
@@ -1769,7 +1770,7 @@ udp_timeout_recovery_teardown(void **state) {
 	atomic_assert_int_eq(csends, expected_creads);
 	atomic_assert_int_eq(ctimeouts, expected_ctimeouts);
 	teardown_udp_test(state);
-	return (0);
+	return 0;
 }
 
 void
@@ -1791,14 +1792,14 @@ udp_timeout_recovery(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_timeout_recovery_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_timeout_recovery_setup(state));
+	return udp_timeout_recovery_setup(state);
 }
 
 int
 proxyudp_timeout_recovery_teardown(void **state) {
 	int ret = udp_timeout_recovery_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 static void
@@ -1819,8 +1820,7 @@ udp_shutdown_connect_connect_cb(isc_nmhandle_t *handle, isc_result_t eresult,
 	 */
 	if (atomic_fetch_add(&cconnects, 1) == 0) {
 		assert_int_equal(eresult, ISC_R_SUCCESS);
-		isc_async_current(loopmgr, udp_shutdown_connect_async_cb,
-				  netmgr);
+		isc_async_current(udp_shutdown_connect_async_cb, netmgr);
 	} else {
 		assert_int_equal(eresult, ISC_R_SHUTTINGDOWN);
 	}
@@ -1836,14 +1836,14 @@ int
 udp_shutdown_connect_setup(void **state) {
 	setup_udp_test(state);
 	expected_cconnects = 2;
-	return (0);
+	return 0;
 }
 
 int
 udp_shutdown_connect_teardown(void **state) {
 	atomic_assert_int_eq(cconnects, expected_cconnects);
 	teardown_udp_test(state);
-	return (0);
+	return 0;
 }
 
 void
@@ -1853,20 +1853,20 @@ udp_shutdown_connect(void **arg ISC_ATTR_UNUSED) {
 	 * isc_nm_udpconnect() is synchronous, so we need to launch this on the
 	 * async loop.
 	 */
-	isc_async_current(loopmgr, udp_shutdown_connect_async_cb, netmgr);
+	isc_async_current(udp_shutdown_connect_async_cb, netmgr);
 }
 
 int
 proxyudp_shutdown_connect_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_shutdown_connect_setup(state));
+	return udp_shutdown_connect_setup(state);
 }
 
 int
 proxyudp_shutdown_connect_teardown(void **state) {
 	int ret = udp_shutdown_connect_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 static void
@@ -1952,7 +1952,7 @@ udp_shutdown_read_setup(void **state) {
 	setup_udp_test(state);
 	expected_cconnects = 1;
 	expected_creads = 1;
-	return (0);
+	return 0;
 }
 
 int
@@ -1960,7 +1960,7 @@ udp_shutdown_read_teardown(void **state) {
 	atomic_assert_int_eq(cconnects, expected_cconnects);
 	atomic_assert_int_eq(creads, expected_creads);
 	teardown_udp_test(state);
-	return (0);
+	return 0;
 }
 
 void
@@ -1974,14 +1974,14 @@ udp_shutdown_read(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_shutdown_read_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_shutdown_read_setup(state));
+	return udp_shutdown_read_setup(state);
 }
 
 int
 proxyudp_shutdown_read_teardown(void **state) {
 	int ret = udp_shutdown_read_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 static void
@@ -2082,7 +2082,7 @@ udp_cancel_read_setup(void **state) {
 	setup_udp_test(state);
 	expected_cconnects = 1;
 	expected_creads = 1;
-	return (0);
+	return 0;
 }
 
 int
@@ -2090,7 +2090,7 @@ udp_cancel_read_teardown(void **state) {
 	atomic_assert_int_eq(cconnects, expected_cconnects);
 	atomic_assert_int_eq(creads, expected_creads);
 	teardown_udp_test(state);
-	return (0);
+	return 0;
 }
 
 void
@@ -2104,14 +2104,14 @@ udp_cancel_read(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_cancel_read_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_cancel_read_setup(state));
+	return udp_cancel_read_setup(state);
 }
 
 int
 proxyudp_cancel_read_teardown(void **state) {
 	int ret = udp_cancel_read_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 int
@@ -2135,7 +2135,7 @@ udp_recv_one_setup(void **state) {
 	expected_creads = 1;
 	creads_shutdown = true;
 
-	return (0);
+	return 0;
 }
 
 int
@@ -2148,7 +2148,7 @@ udp_recv_one_teardown(void **state) {
 
 	teardown_udp_test(state);
 
-	return (0);
+	return 0;
 }
 
 void
@@ -2161,14 +2161,14 @@ udp_recv_one(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_recv_one_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_recv_one_setup(state));
+	return udp_recv_one_setup(state);
 }
 
 int
 proxyudp_recv_one_teardown(void **state) {
 	int ret = udp_recv_one_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 int
@@ -2192,7 +2192,7 @@ udp_recv_two_setup(void **state) {
 	expected_creads = 2;
 	creads_shutdown = true;
 
-	return (0);
+	return 0;
 }
 
 int
@@ -2204,7 +2204,7 @@ udp_recv_two_teardown(void **state) {
 	atomic_assert_int_eq(creads, expected_creads);
 
 	teardown_udp_test(state);
-	return (0);
+	return 0;
 }
 
 void
@@ -2218,14 +2218,14 @@ udp_recv_two(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_recv_two_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_recv_two_setup(state));
+	return udp_recv_two_setup(state);
 }
 
 int
 proxyudp_recv_two_teardown(void **state) {
 	int ret = udp_recv_two_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 int
@@ -2239,7 +2239,7 @@ udp_recv_send_setup(void **state) {
 	expected_creads = workers * NSENDS;
 	do_send = true;
 
-	return (0);
+	return 0;
 }
 
 int
@@ -2251,7 +2251,7 @@ udp_recv_send_teardown(void **state) {
 	atomic_assert_int_ge(creads, expected_creads);
 
 	teardown_udp_test(state);
-	return (0);
+	return 0;
 }
 
 void
@@ -2267,14 +2267,14 @@ udp_recv_send(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_recv_send_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_recv_send_setup(state));
+	return udp_recv_send_setup(state);
 }
 
 int
 proxyudp_recv_send_teardown(void **state) {
 	int ret = udp_recv_send_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }
 
 static void
@@ -2429,7 +2429,7 @@ udp_double_read_setup(void **state) {
 
 	connect_readcb = udp_double_read_cb;
 
-	return (0);
+	return 0;
 }
 
 int
@@ -2438,7 +2438,7 @@ udp_double_read_teardown(void **state) {
 
 	teardown_udp_test(state);
 
-	return (0);
+	return 0;
 }
 
 void
@@ -2451,12 +2451,12 @@ udp_double_read(void **arg ISC_ATTR_UNUSED) {
 int
 proxyudp_double_read_setup(void **state) {
 	udp_use_PROXY = true;
-	return (udp_double_read_setup(state));
+	return udp_double_read_setup(state);
 }
 
 int
 proxyudp_double_read_teardown(void **state) {
 	int ret = udp_double_read_teardown(state);
 	udp_use_PROXY = false;
-	return (ret);
+	return ret;
 }

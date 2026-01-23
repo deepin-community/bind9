@@ -76,14 +76,14 @@ setup_env(void **unused __attribute__((__unused__))) {
 		rnd[i] = (uint8_t)isc_random_uniform(100);
 	}
 
-	return (0);
+	return 0;
 }
 
 static int
 teardown_env(void **state __attribute__((__unused__))) {
 	isc_mem_cput(mctx, rnd, loops, sizeof(rnd[0]));
 
-	return (0);
+	return 0;
 }
 
 static int
@@ -93,23 +93,23 @@ rwlock_setup(void **state __attribute__((__unused__))) {
 	isc_barrier_init(&barrier1, 2);
 	isc_barrier_init(&barrier2, 2);
 	if (pthread_rwlock_init(&prwlock, NULL) == -1) {
-		return (errno);
+		return errno;
 	}
 
-	return (0);
+	return 0;
 }
 
 static int
 rwlock_teardown(void **state __attribute__((__unused__))) {
 	if (pthread_rwlock_destroy(&prwlock) == -1) {
-		return (errno);
+		return errno;
 	}
 	isc_barrier_destroy(&barrier2);
 	isc_barrier_destroy(&barrier1);
 
 	isc_rwlock_destroy(&rwlock);
 
-	return (0);
+	return 0;
 }
 
 /*
@@ -137,8 +137,17 @@ ISC_RUN_TEST_IMPL(isc_rwlock_tryupgrade) {
 	isc_result_t result;
 	isc_rwlock_lock(&rwlock, isc_rwlocktype_read);
 	result = isc_rwlock_tryupgrade(&rwlock);
+#if USE_PTHREAD_RWLOCK
+	/*
+	 * Our pthread-based rwlock implementation does not support tryupgrade,
+	 * and always returns ISC_R_LOCKBUSY.
+	 */
+	assert_int_equal(result, ISC_R_LOCKBUSY);
+	isc_rwlock_unlock(&rwlock, isc_rwlocktype_read);
+#else
 	assert_int_equal(result, ISC_R_SUCCESS);
 	isc_rwlock_unlock(&rwlock, isc_rwlocktype_write);
+#endif /* USE_PTHREAD_RWLOCK */
 }
 
 static void *
@@ -157,7 +166,7 @@ trylock_thread1(void *arg __attribute__((__unused__))) {
 
 	isc_rwlock_unlock(&rwlock, isc_rwlocktype_read);
 
-	return (NULL);
+	return NULL;
 }
 
 static void *
@@ -179,7 +188,7 @@ trylock_thread2(void *arg __attribute__((__unused__))) {
 
 	isc_rwlock_unlock(&rwlock, isc_rwlocktype_read);
 
-	return (NULL);
+	return NULL;
 }
 
 ISC_RUN_TEST_IMPL(isc_rwlock_trylock) {
@@ -212,7 +221,7 @@ pthread_rwlock_thread(void *arg __attribute__((__unused__))) {
 		isc_pause_n(cont);
 	}
 
-	return (NULL);
+	return NULL;
 }
 
 static void *
@@ -234,7 +243,7 @@ isc_rwlock_thread(void *arg __attribute__((__unused__))) {
 		isc_pause_n(cont);
 	}
 
-	return (NULL);
+	return NULL;
 }
 
 static void

@@ -68,6 +68,7 @@
 #include <stdio.h>
 
 #include <isc/buffer.h>
+#include <isc/hashmap.h>
 #include <isc/lang.h>
 #include <isc/magic.h>
 #include <isc/region.h> /* Required for storage size of dns_label_t. */
@@ -95,10 +96,9 @@ ISC_LANG_BEGINDECLS
  * for whatever purpose the client desires.
  */
 struct dns_name {
-	unsigned int   magic;
-	unsigned char *ndata;
-	unsigned int   length;
-	unsigned int   labels;
+	unsigned int magic;
+	uint8_t	     length;
+	uint8_t	     labels;
 	struct dns_name_attrs {
 		bool absolute	  : 1; /*%< Used by name.c */
 		bool readonly	  : 1; /*%< Used by name.c */
@@ -115,10 +115,12 @@ struct dns_name {
 		bool update	  : 1; /*%< Used by client. */
 		bool hasupdaterec : 1; /*%< Used by client. */
 	} attributes;
+	unsigned char *ndata;
 	unsigned char *offsets;
 	isc_buffer_t  *buffer;
 	ISC_LINK(dns_name_t) link;
 	ISC_LIST(dns_rdataset_t) list;
+	isc_hashmap_t *hashmap;
 };
 
 #define DNS_NAME_MAGIC	  ISC_MAGIC('D', 'N', 'S', 'n')
@@ -164,28 +166,34 @@ extern const dns_name_t *dns_wildcardname;
  *	unsigned char offsets[] = { 0, 6 };
  *	dns_name_t value = DNS_NAME_INITABSOLUTE(data, offsets);
  */
-#define DNS_NAME_INITNONABSOLUTE(A, B)                                      \
-	{                                                                   \
-		.magic = DNS_NAME_MAGIC, .ndata = A,                        \
-		.length = (sizeof(A) - 1), .labels = sizeof(B),             \
-		.attributes = { .readonly = true }, .offsets = B,           \
-		.link = ISC_LINK_INITIALIZER, .list = ISC_LIST_INITIALIZER, \
+#define DNS_NAME_INITNONABSOLUTE(A, B)              \
+	{                                           \
+		.magic = DNS_NAME_MAGIC,            \
+		.ndata = A,                         \
+		.length = (sizeof(A) - 1),          \
+		.labels = sizeof(B),                \
+		.attributes = { .readonly = true }, \
+		.offsets = B,                       \
+		.link = ISC_LINK_INITIALIZER,       \
+		.list = ISC_LIST_INITIALIZER,       \
 	}
 
-#define DNS_NAME_INITABSOLUTE(A, B)                                       \
-	{                                                                 \
-		.magic = DNS_NAME_MAGIC, .ndata = A, .length = sizeof(A), \
-		.labels = sizeof(B),                                      \
-		.attributes = { .readonly = true, .absolute = true },     \
-		.offsets = B, .link = ISC_LINK_INITIALIZER,               \
-		.list = ISC_LIST_INITIALIZER,                             \
+#define DNS_NAME_INITABSOLUTE(A, B)                                   \
+	{                                                             \
+		.magic = DNS_NAME_MAGIC,                              \
+		.ndata = A,                                           \
+		.length = sizeof(A),                                  \
+		.labels = sizeof(B),                                  \
+		.attributes = { .readonly = true, .absolute = true }, \
+		.offsets = B,                                         \
+		.link = ISC_LINK_INITIALIZER,                         \
+		.list = ISC_LIST_INITIALIZER,                         \
 	}
 
-#define DNS_NAME_INITEMPTY                                             \
-	{                                                              \
-		.magic = DNS_NAME_MAGIC, .link = ISC_LINK_INITIALIZER, \
-		.list = ISC_LIST_INITIALIZER                           \
-	}
+#define DNS_NAME_INITEMPTY              \
+	{ .magic = DNS_NAME_MAGIC,      \
+	  .link = ISC_LINK_INITIALIZER, \
+	  .list = ISC_LIST_INITIALIZER }
 
 /*%
  * Standard sizes of a wire format name
@@ -594,7 +602,7 @@ dns_name_countlabels(const dns_name_t *name) {
 	REQUIRE(DNS_NAME_VALID(name));
 	REQUIRE(name->labels <= DNS_NAME_MAXLABELS);
 
-	return (name->labels);
+	return name->labels;
 }
 /*%<
  * How many labels does 'name' have?
@@ -1076,7 +1084,7 @@ dns_name_dup(const dns_name_t *source, isc_mem_t *mctx, dns_name_t *target);
  *\li	'mctx' is a valid memory context.
  */
 
-isc_result_t
+void
 dns_name_dupwithoffsets(const dns_name_t *source, isc_mem_t *mctx,
 			dns_name_t *target);
 /*%<
@@ -1335,6 +1343,16 @@ dns_name_isdnssvcb(const dns_name_t *name);
 /*%<
  * Determine if 'name' is a dns service name,
  * i.e. it starts with and optional _port label followed by a _dns label.
+ */
+
+size_t
+dns_name_size(const dns_name_t *name);
+/*%<
+ * Return the amount of dynamically allocated memory associated with
+ * 'name' (which is 0 if 'name' is not dynamic).
+ *
+ * Requires:
+ * \li	'name' to be valid.
  */
 
 ISC_LANG_ENDDECLS

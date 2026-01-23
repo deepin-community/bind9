@@ -9,6 +9,23 @@
 # See the COPYRIGHT file distributed with this work for additional
 # information regarding copyright ownership.
 
+import pytest
+
+# isctest.asyncserver requires dnspython >= 2.0.0
+pytest.importorskip("dns", minversion="2.0.0")
+
+pytestmark = pytest.mark.extra_artifacts(
+    [
+        "curl.out.*",
+        "dig.out.*",
+        "named.stats.*",
+        "stats.xml.out",
+        "xsltproc.out.*",
+        "ans*/ans.run",
+        "ns*/statistics-channels.conf",
+    ]
+)
+
 
 def test_statistics(run_tests_sh):
     run_tests_sh()

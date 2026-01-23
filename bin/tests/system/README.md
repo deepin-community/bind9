@@ -51,6 +51,7 @@ To run system tests, make sure you have the following dependencies installed:
 - perl
 - dnspython
 - pytest-xdist (for parallel execution)
+- python-jinja2
 
 Individual system tests might also require additional dependencies. If those
 are missing, the affected tests will be skipped and should produce a message
@@ -154,9 +155,17 @@ system test directories may contain the following standard files:
 - `tests_*.py`: These python files are picked up by pytest as modules. If they
   contain any test functions, they're added to the test suite.
 
-- `setup.sh`: This sets up the preconditions for the tests. Although optional,
-  virtually all tests will require such a file to set up the ports they should
-  use for the test.
+- `*.j2`: These jinja2 templates can be used for configuration files or any
+  other files which require certain variables filled in, e.g. ports from the
+  environment variables. During test setup, the pytest runner will automatically
+  fill those in and strip the filename extension .j2, e.g. `ns1/named.conf.j2`
+  becomes `ns1/named.conf`. When using advanced templating to conditionally
+  include/omit entire sections or when filling in custom variables used for the
+  test, ensure the templates always include the defaults. If you don't need the
+  file to be auto-templated during test setup, use `.j2.manual` instead and then
+  no defaults are needed.
+
+- `setup.sh`: This sets up the preconditions for the tests.
 
 - `tests.sh`: Any shell-based tests are located within this file. Runs the
   actual tests.
@@ -208,8 +217,8 @@ assigned port numbers. They're also set as environment variables. These include:
 
 Each module has a separate log which will be saved as pytest.log.txt in the
 temporary directory in which the test is executed. This log includes messages
-for this module setup/teardown as well as any logging from the tests using the
-`logger` fixture. Logging level DEBUG and above will be present in this log.
+for this module setup/teardown as well as any logging from the tests. Logging
+level DEBUG and above will be present in this log.
 
 In general, any log messages using INFO or above will also be printed out
 during pytest execution. In CI, the pytest output is also saved to
@@ -233,41 +242,6 @@ This script is responsible for setting up the configuration files used in the
 test. It is used by both the python and shell tests. It is interpreted just
 before the servers are started up for each test module.
 
-To cope with the varying port number, ports are not hard-coded into
-configuration files (or, for that matter, scripts that emulate nameservers).
-Instead, setup.sh is responsible for editing the configuration files to set the
-port numbers.
-
-To do this, configuration files should be supplied in the form of templates
-containing tokens identifying ports.  The tokens have the same name as the
-environment variables listed above, but are prefixed and suffixed by the "@"
-symbol.  For example, a fragment of a configuration file template might look
-like:
-
-    controls {
-        inet 10.53.0.1 port @CONTROLPORT@ allow { any; } keys { rndc_key; };
-    };
-
-    options {
-        query-source address 10.53.0.1;
-        notify-source 10.53.0.1;
-        transfer-source 10.53.0.1;
-        port @PORT@;
-        allow-new-zones yes;
-    };
-
-setup.sh should copy the template to the desired filename using the
-"copy_setports" shell function defined in "conf.sh", i.e.
-
-    copy_setports ns1/named.conf.in ns1/named.conf
-
-This replaces tokens like @PORT@ with the contents of the environment variables
-listed above. setup.sh should do this for all configuration files required when
-the test starts.
-
-("setup.sh" should also use this method for replacing the tokens in any Perl or
-Python name servers used in the test.)
-
 ### tests_*.py
 
 These are test modules containing tests written in python. Every test is a
@@ -276,7 +250,6 @@ is possible to pass fixtures to the test function by specifying their name as
 function arguments. Fixtures are used to provide context to the tests, e.g.:
 
 - `ports` is a dictionary with assigned port numbers
-- `logger` is a test-specific logging object
 
 ### tests_sh_*.py
 

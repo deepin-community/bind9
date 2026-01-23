@@ -9,6 +9,24 @@
 # See the COPYRIGHT file distributed with this work for additional
 # information regarding copyright ownership.
 
+import pytest
+
+# isctest.asyncserver requires dnspython >= 2.0.0
+pytest.importorskip("dns", minversion="2.0.0")
+
+pytestmark = pytest.mark.extra_artifacts(
+    [
+        "dig.out.*",
+        "dnsrps.cache",
+        "dnsrps.conf",
+        "ans*/ans.run",
+        "ns2/*.queries",
+        "ns2/*.local",
+        "ns2/named.*.conf",
+        "ns2/named.conf.header",
+    ]
+)
+
 
 def test_rpzrecurse(run_tests_sh):
     run_tests_sh()

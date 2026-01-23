@@ -37,7 +37,7 @@ fromtext_md(ARGS_FROMTEXT) {
 		origin = dns_rootname;
 	}
 	RETTOK(dns_name_fromtext(&name, &buffer, origin, options, target));
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static isc_result_t
@@ -58,7 +58,7 @@ totext_md(ARGS_TOTEXT) {
 
 	opts = name_prefix(&name, tctx->origin, &prefix) ? DNS_NAME_OMITFINALDOT
 							 : 0;
-	return (dns_name_totext(&prefix, opts, target));
+	return dns_name_totext(&prefix, opts, target);
 }
 
 static isc_result_t
@@ -73,7 +73,7 @@ fromwire_md(ARGS_FROMWIRE) {
 	dctx = dns_decompress_setpermitted(dctx, true);
 
 	dns_name_init(&name, NULL);
-	return (dns_name_fromwire(&name, source, dctx, target));
+	return dns_name_fromwire(&name, source, dctx, target);
 }
 
 static isc_result_t
@@ -91,7 +91,7 @@ towire_md(ARGS_TOWIRE) {
 	dns_rdata_toregion(rdata, &region);
 	dns_name_fromregion(&name, &region);
 
-	return (dns_name_towire(&name, cctx, target, NULL));
+	return dns_name_towire(&name, cctx, target, NULL);
 }
 
 static int
@@ -116,7 +116,7 @@ compare_md(ARGS_COMPARE) {
 	dns_name_fromregion(&name1, &region1);
 	dns_name_fromregion(&name2, &region2);
 
-	return (dns_name_rdatacompare(&name1, &name2));
+	return dns_name_rdatacompare(&name1, &name2);
 }
 
 static isc_result_t
@@ -133,7 +133,7 @@ fromstruct_md(ARGS_FROMSTRUCT) {
 	UNUSED(rdclass);
 
 	dns_name_toregion(&md->md, &region);
-	return (isc_buffer_copyregion(target, &region));
+	return isc_buffer_copyregion(target, &region);
 }
 
 static isc_result_t
@@ -146,9 +146,7 @@ tostruct_md(ARGS_TOSTRUCT) {
 	REQUIRE(md != NULL);
 	REQUIRE(rdata->length != 0);
 
-	md->common.rdclass = rdata->rdclass;
-	md->common.rdtype = rdata->type;
-	ISC_LINK_INIT(&md->common, link);
+	DNS_RDATACOMMON_INIT(md, rdata->type, rdata->rdclass);
 
 	dns_name_init(&name, NULL);
 	dns_rdata_toregion(rdata, &r);
@@ -156,7 +154,7 @@ tostruct_md(ARGS_TOSTRUCT) {
 	dns_name_init(&md->md, NULL);
 	name_duporclone(&name, mctx, &md->md);
 	md->mctx = mctx;
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static void
@@ -188,7 +186,7 @@ additionaldata_md(ARGS_ADDLDATA) {
 	dns_rdata_toregion(rdata, &region);
 	dns_name_fromregion(&name, &region);
 
-	return ((add)(arg, &name, dns_rdatatype_a, NULL DNS__DB_FILELINE));
+	return (add)(arg, &name, dns_rdatatype_a, NULL DNS__DB_FILELINE);
 }
 
 static isc_result_t
@@ -202,7 +200,7 @@ digest_md(ARGS_DIGEST) {
 	dns_name_init(&name, NULL);
 	dns_name_fromregion(&name, &r);
 
-	return (dns_name_digest(&name, digest, arg));
+	return dns_name_digest(&name, digest, arg);
 }
 
 static bool
@@ -214,7 +212,7 @@ checkowner_md(ARGS_CHECKOWNER) {
 	UNUSED(rdclass);
 	UNUSED(wildcard);
 
-	return (true);
+	return true;
 }
 
 static bool
@@ -225,12 +223,12 @@ checknames_md(ARGS_CHECKNAMES) {
 	UNUSED(owner);
 	UNUSED(bad);
 
-	return (true);
+	return true;
 }
 
 static int
 casecompare_md(ARGS_COMPARE) {
-	return (compare_md(rdata1, rdata2));
+	return compare_md(rdata1, rdata2);
 }
 
 #endif /* RDATA_GENERIC_MD_3_C */

@@ -36,8 +36,9 @@ BIND 9 Administrator Reference Manual
    :name: appendices
    :maxdepth: 2
 
-   notes
    dnssec-guide
-   history
-   general
    manpages
+   general
+   notes
+   changelog
+   history

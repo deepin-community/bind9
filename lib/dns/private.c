@@ -43,13 +43,6 @@
 #define INITIAL(x) (((x) & DNS_NSEC3FLAG_INITIAL) != 0)
 #define NONSEC(x)  (((x) & DNS_NSEC3FLAG_NONSEC) != 0)
 
-#define CHECK(x)                             \
-	do {                                 \
-		result = (x);                \
-		if (result != ISC_R_SUCCESS) \
-			goto failure;        \
-	} while (0)
-
 /*
  * Work out if 'param' should be ignored or not (i.e. it is in the process
  * of being removed).
@@ -80,7 +73,7 @@ ignore(dns_rdata_t *param, dns_rdataset_t *privateset) {
 		 * doesn't matter if we are removing this one.
 		 */
 		if (CREATE(rdata.data[1])) {
-			return (false);
+			return false;
 		}
 		if (rdata.data[0] != param->data[0] ||
 		    rdata.data[2] != param->data[2] ||
@@ -96,11 +89,11 @@ ignore(dns_rdata_t *param, dns_rdataset_t *privateset) {
 		 * the caller that it will be removed.
 		 */
 		if (NONSEC(rdata.data[1])) {
-			return (false);
+			return false;
 		}
-		return (true);
+		return true;
 	}
-	return (false);
+	return false;
 }
 
 isc_result_t
@@ -125,25 +118,21 @@ dns_private_chains(dns_db_t *db, dns_dbversion_t *ver,
 	result = dns_db_findrdataset(db, node, ver, dns_rdatatype_nsec, 0,
 				     (isc_stdtime_t)0, &nsecset, NULL);
 
-	if (result != ISC_R_SUCCESS && result != ISC_R_NOTFOUND) {
-		goto failure;
+	if (result != ISC_R_NOTFOUND) {
+		CHECK(result);
 	}
 
 	result = dns_db_findrdataset(db, node, ver, dns_rdatatype_nsec3param, 0,
 				     (isc_stdtime_t)0, &nsec3paramset, NULL);
-	if (result != ISC_R_SUCCESS && result != ISC_R_NOTFOUND) {
-		goto failure;
+	if (result != ISC_R_NOTFOUND) {
+		CHECK(result);
 	}
 
 	if (dns_rdataset_isassociated(&nsecset) &&
 	    dns_rdataset_isassociated(&nsec3paramset))
 	{
-		if (build_nsec != NULL) {
-			*build_nsec = true;
-		}
-		if (build_nsec3 != NULL) {
-			*build_nsec3 = true;
-		}
+		SET_IF_NOT_NULL(build_nsec, true);
+		SET_IF_NOT_NULL(build_nsec3, true);
 		goto success;
 	}
 
@@ -151,8 +140,8 @@ dns_private_chains(dns_db_t *db, dns_dbversion_t *ver,
 		result = dns_db_findrdataset(db, node, ver, privatetype, 0,
 					     (isc_stdtime_t)0, &privateset,
 					     NULL);
-		if (result != ISC_R_SUCCESS && result != ISC_R_NOTFOUND) {
-			goto failure;
+		if (result != ISC_R_NOTFOUND) {
+			CHECK(result);
 		}
 	}
 
@@ -160,12 +149,8 @@ dns_private_chains(dns_db_t *db, dns_dbversion_t *ver,
 	 * Look to see if we also need to be creating a NSEC3 chain.
 	 */
 	if (dns_rdataset_isassociated(&nsecset)) {
-		if (build_nsec != NULL) {
-			*build_nsec = true;
-		}
-		if (build_nsec3 != NULL) {
-			*build_nsec3 = false;
-		}
+		SET_IF_NOT_NULL(build_nsec, true);
+		SET_IF_NOT_NULL(build_nsec3, false);
 		if (!dns_rdataset_isassociated(&privateset)) {
 			goto success;
 		}
@@ -194,12 +179,8 @@ dns_private_chains(dns_db_t *db, dns_dbversion_t *ver,
 	}
 
 	if (dns_rdataset_isassociated(&nsec3paramset)) {
-		if (build_nsec3 != NULL) {
-			*build_nsec3 = true;
-		}
-		if (build_nsec != NULL) {
-			*build_nsec = false;
-		}
+		SET_IF_NOT_NULL(build_nsec3, true);
+		SET_IF_NOT_NULL(build_nsec, false);
 		if (!dns_rdataset_isassociated(&privateset)) {
 			goto success;
 		}
@@ -264,12 +245,8 @@ dns_private_chains(dns_db_t *db, dns_dbversion_t *ver,
 		goto success;
 	}
 
-	if (build_nsec != NULL) {
-		*build_nsec = false;
-	}
-	if (build_nsec3 != NULL) {
-		*build_nsec3 = false;
-	}
+	SET_IF_NOT_NULL(build_nsec, false);
+	SET_IF_NOT_NULL(build_nsec3, false);
 	if (!dns_rdataset_isassociated(&privateset)) {
 		goto success;
 	}
@@ -317,7 +294,7 @@ dns_private_chains(dns_db_t *db, dns_dbversion_t *ver,
 
 success:
 	result = ISC_R_SUCCESS;
-failure:
+cleanup:
 	if (dns_rdataset_isassociated(&nsecset)) {
 		dns_rdataset_disassociate(&nsecset);
 	}
@@ -330,7 +307,7 @@ failure:
 	if (node != NULL) {
 		dns_db_detachnode(db, &node);
 	}
-	return (result);
+	return result;
 }
 
 isc_result_t
@@ -338,7 +315,7 @@ dns_private_totext(dns_rdata_t *private, isc_buffer_t *buf) {
 	isc_result_t result;
 
 	if (private->length < 5) {
-		return (ISC_R_NOTFOUND);
+		return ISC_R_NOTFOUND;
 	}
 
 	if (private->data[0] == 0) {
@@ -406,11 +383,11 @@ dns_private_totext(dns_rdata_t *private, isc_buffer_t *buf) {
 		snprintf(keybuf, sizeof(keybuf), "key %d/%s", keyid, algbuf);
 		isc_buffer_putstr(buf, keybuf);
 	} else {
-		return (ISC_R_NOTFOUND);
+		return ISC_R_NOTFOUND;
 	}
 
 	isc_buffer_putuint8(buf, 0);
 	result = ISC_R_SUCCESS;
-failure:
-	return (result);
+cleanup:
+	return result;
 }

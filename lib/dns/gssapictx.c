@@ -92,13 +92,6 @@ static gss_OID_desc __gss_spnego_mechanism_oid_desc = {
 		(r).base = (gb).value;                  \
 	} while (0)
 
-#define RETERR(x)                            \
-	do {                                 \
-		result = (x);                \
-		if (result != ISC_R_SUCCESS) \
-			goto out;            \
-	} while (0)
-
 static void
 name_to_gbuffer(const dns_name_t *name, isc_buffer_t *buffer,
 		gss_buffer_desc *gbuffer) {
@@ -241,7 +234,7 @@ mech_oid_set_create(OM_uint32 *minor, gss_OID_set *mech_oid_set) {
 
 	gret = gss_create_empty_oid_set(minor, mech_oid_set);
 	if (gret != GSS_S_COMPLETE) {
-		return (gret);
+		return gret;
 	}
 
 	gret = gss_add_oid_set_member(minor, GSS_KRB5_MECHANISM, mech_oid_set);
@@ -258,7 +251,7 @@ mech_oid_set_create(OM_uint32 *minor, gss_OID_set *mech_oid_set) {
 release:
 	REQUIRE(gss_release_oid_set(minor, mech_oid_set) == GSS_S_COMPLETE);
 
-	return (gret);
+	return gret;
 }
 
 static void
@@ -303,7 +296,7 @@ dst_gssapi_acquirecred(const dns_name_t *name, bool initiate,
 			gss_log(3, "failed gss_import_name: %s",
 				gss_error_tostring(gret, minor, buf,
 						   sizeof(buf)));
-			return (ISC_R_FAILURE);
+			return ISC_R_FAILURE;
 		}
 	} else {
 		gname = NULL;
@@ -328,7 +321,7 @@ dst_gssapi_acquirecred(const dns_name_t *name, bool initiate,
 	if (gret != GSS_S_COMPLETE) {
 		gss_log(3, "failed to create OID_set: %s",
 			gss_error_tostring(gret, minor, buf, sizeof(buf)));
-		return (ISC_R_FAILURE);
+		return ISC_R_FAILURE;
 	}
 
 	gret = gss_acquire_cred(&minor, gname, GSS_C_INDEFINITE, mech_oid_set,
@@ -365,7 +358,7 @@ cleanup:
 		}
 	}
 
-	return (result);
+	return result;
 }
 
 bool
@@ -397,13 +390,13 @@ dst_gssapi_identitymatchesrealmkrb5(const dns_name_t *signer,
 	 */
 	rname = strchr(sbuf, '@');
 	if (rname == NULL) {
-		return (false);
+		return false;
 	}
 	*rname = '\0';
 	rname++;
 
 	if (strcmp(rname, rbuf) != 0) {
-		return (false);
+		return false;
 	}
 
 	/*
@@ -416,12 +409,12 @@ dst_gssapi_identitymatchesrealmkrb5(const dns_name_t *signer,
 	 */
 	sname = strchr(sbuf, '/');
 	if (sname == NULL) {
-		return (false);
+		return false;
 	}
 	*sname = '\0';
 	sname++;
 	if (strcmp(sbuf, "host") != 0) {
-		return (false);
+		return false;
 	}
 
 	/*
@@ -436,15 +429,15 @@ dst_gssapi_identitymatchesrealmkrb5(const dns_name_t *signer,
 		result = dns_name_fromstring(machine, sname, dns_rootname, 0,
 					     NULL);
 		if (result != ISC_R_SUCCESS) {
-			return (false);
+			return false;
 		}
 		if (subdomain) {
-			return (dns_name_issubdomain(name, machine));
+			return dns_name_issubdomain(name, machine);
 		}
-		return (dns_name_equal(name, machine));
+		return dns_name_equal(name, machine);
 	}
 
-	return (true);
+	return true;
 }
 
 bool
@@ -476,18 +469,18 @@ dst_gssapi_identitymatchesrealmms(const dns_name_t *signer,
 	 */
 	rname = strchr(sbuf, '@');
 	if (rname == NULL) {
-		return (false);
+		return false;
 	}
 	sname = strchr(sbuf, '$');
 	if (sname == NULL) {
-		return (false);
+		return false;
 	}
 
 	/*
 	 * Verify that the $ and @ follow one another.
 	 */
 	if (rname - sname != 1) {
-		return (false);
+		return false;
 	}
 
 	/*
@@ -503,7 +496,7 @@ dst_gssapi_identitymatchesrealmms(const dns_name_t *signer,
 	*sname = '\0';
 
 	if (strcmp(rname, rbuf) != 0) {
-		return (false);
+		return false;
 	}
 
 	/*
@@ -517,15 +510,15 @@ dst_gssapi_identitymatchesrealmms(const dns_name_t *signer,
 		machine = dns_fixedname_initname(&fixed);
 		result = dns_name_fromstring(machine, sbuf, realm, 0, NULL);
 		if (result != ISC_R_SUCCESS) {
-			return (false);
+			return false;
 		}
 		if (subdomain) {
-			return (dns_name_issubdomain(name, machine));
+			return dns_name_issubdomain(name, machine);
 		}
-		return (dns_name_equal(name, machine));
+		return dns_name_equal(name, machine);
 	}
 
-	return (true);
+	return true;
 }
 
 isc_result_t
@@ -543,7 +536,7 @@ dst_gssapi_releasecred(dns_gss_cred_id_t *cred) {
 	}
 	*cred = NULL;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 /*
@@ -592,8 +585,7 @@ dst_gssapi_initctx(const dns_name_t *name, isc_buffer_t *intoken,
 	gret = gss_import_name(&minor, &gnamebuf, GSS_C_NO_OID, &gname);
 	if (gret != GSS_S_COMPLETE) {
 		gss_err_message(mctx, gret, minor, err_message);
-		result = ISC_R_FAILURE;
-		goto out;
+		CHECK(ISC_R_FAILURE);
 	}
 
 	if (intoken != NULL) {
@@ -624,8 +616,7 @@ dst_gssapi_initctx(const dns_name_t *name, isc_buffer_t *intoken,
 			gss_log(3, "Failure initiating security context");
 		}
 
-		result = ISC_R_FAILURE;
-		goto out;
+		CHECK(ISC_R_FAILURE);
 	}
 
 	/*
@@ -638,7 +629,7 @@ dst_gssapi_initctx(const dns_name_t *name, isc_buffer_t *intoken,
 	 */
 	if (gouttoken.length != 0U) {
 		GBUFFER_TO_REGION(gouttoken, r);
-		RETERR(isc_buffer_copyregion(outtoken, &r));
+		CHECK(isc_buffer_copyregion(outtoken, &r));
 	}
 
 	if (gret == GSS_S_COMPLETE) {
@@ -647,12 +638,12 @@ dst_gssapi_initctx(const dns_name_t *name, isc_buffer_t *intoken,
 		result = DNS_R_CONTINUE;
 	}
 
-out:
+cleanup:
 	if (gouttoken.length != 0U) {
 		(void)gss_release_buffer(&minor, &gouttoken);
 	}
 	(void)gss_release_name(&minor, &gname);
-	return (result);
+	return result;
 }
 
 isc_result_t
@@ -689,7 +680,7 @@ dst_gssapi_acceptctx(dns_gss_cred_id_t cred, const char *gssapi_keytab,
 				"gsskrb5_register_acceptor_identity(%s): %s",
 				gssapi_keytab,
 				gss_error_tostring(gret, 0, buf, sizeof(buf)));
-			return (DNS_R_INVALIDTKEY);
+			return DNS_R_INVALIDTKEY;
 		}
 #else
 		/*
@@ -704,11 +695,11 @@ dst_gssapi_acceptctx(dns_gss_cred_id_t cred, const char *gssapi_keytab,
 			size = strlen(gssapi_keytab) + 13;
 			kt = malloc(size);
 			if (kt == NULL) {
-				return (ISC_R_NOMEMORY);
+				return ISC_R_NOMEMORY;
 			}
 			snprintf(kt, size, "KRB5_KTNAME=%s", gssapi_keytab);
 			if (putenv(kt) != 0) {
-				return (ISC_R_NOMEMORY);
+				return ISC_R_NOMEMORY;
 			}
 		}
 #endif
@@ -745,14 +736,14 @@ dst_gssapi_acceptctx(dns_gss_cred_id_t cred, const char *gssapi_keytab,
 		if (gouttoken.length > 0U) {
 			(void)gss_release_buffer(&minor, &gouttoken);
 		}
-		return (result);
+		return result;
 	}
 
 	if (gouttoken.length > 0U) {
 		isc_buffer_allocate(mctx, outtoken,
 				    (unsigned int)gouttoken.length);
 		GBUFFER_TO_REGION(gouttoken, r);
-		RETERR(isc_buffer_copyregion(*outtoken, &r));
+		CHECK(isc_buffer_copyregion(*outtoken, &r));
 		(void)gss_release_buffer(&minor, &gouttoken);
 	}
 
@@ -762,7 +753,7 @@ dst_gssapi_acceptctx(dns_gss_cred_id_t cred, const char *gssapi_keytab,
 			gss_log(3, "failed gss_display_name: %s",
 				gss_error_tostring(gret, minor, buf,
 						   sizeof(buf)));
-			RETERR(ISC_R_FAILURE);
+			CHECK(ISC_R_FAILURE);
 		}
 
 		/*
@@ -784,8 +775,8 @@ dst_gssapi_acceptctx(dns_gss_cred_id_t cred, const char *gssapi_keytab,
 		isc_buffer_init(&namebuf, r.base, r.length);
 		isc_buffer_add(&namebuf, r.length);
 
-		RETERR(dns_name_fromtext(principal, &namebuf, dns_rootname, 0,
-					 NULL));
+		CHECK(dns_name_fromtext(principal, &namebuf, dns_rootname, 0,
+					NULL));
 
 		if (gnamebuf.length != 0U) {
 			gret = gss_release_buffer(&minor, &gnamebuf);
@@ -801,7 +792,7 @@ dst_gssapi_acceptctx(dns_gss_cred_id_t cred, const char *gssapi_keytab,
 
 	*ctxout = context;
 
-out:
+cleanup:
 	if (gname != NULL) {
 		gret = gss_release_name(&minor, &gname);
 		if (gret != GSS_S_COMPLETE) {
@@ -811,7 +802,7 @@ out:
 		}
 	}
 
-	return (result);
+	return result;
 }
 
 isc_result_t
@@ -831,7 +822,7 @@ dst_gssapi_deletectx(isc_mem_t *mctx, dns_gss_ctx_id_t *gssctx) {
 		gss_log(3, "Failure deleting security context %s",
 			gss_error_tostring(gret, minor, buf, sizeof(buf)));
 	}
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 char *
@@ -859,7 +850,7 @@ gss_error_tostring(uint32_t major, uint32_t minor, char *buf, size_t buflen) {
 	if (msg_minor.length != 0U) {
 		(void)gss_release_buffer(&minor_stat, &msg_minor);
 	}
-	return (buf);
+	return buf;
 }
 
 #else
@@ -873,7 +864,7 @@ dst_gssapi_acquirecred(const dns_name_t *name, bool initiate,
 	UNUSED(initiate);
 	UNUSED(cred);
 
-	return (ISC_R_NOTIMPLEMENTED);
+	return ISC_R_NOTIMPLEMENTED;
 }
 
 bool
@@ -885,7 +876,7 @@ dst_gssapi_identitymatchesrealmkrb5(const dns_name_t *signer,
 	UNUSED(realm);
 	UNUSED(subdomain);
 
-	return (false);
+	return false;
 }
 
 bool
@@ -897,14 +888,14 @@ dst_gssapi_identitymatchesrealmms(const dns_name_t *signer,
 	UNUSED(realm);
 	UNUSED(subdomain);
 
-	return (false);
+	return false;
 }
 
 isc_result_t
 dst_gssapi_releasecred(dns_gss_cred_id_t *cred) {
 	UNUSED(cred);
 
-	return (ISC_R_NOTIMPLEMENTED);
+	return ISC_R_NOTIMPLEMENTED;
 }
 
 isc_result_t
@@ -918,7 +909,7 @@ dst_gssapi_initctx(const dns_name_t *name, isc_buffer_t *intoken,
 	UNUSED(mctx);
 	UNUSED(err_message);
 
-	return (ISC_R_NOTIMPLEMENTED);
+	return ISC_R_NOTIMPLEMENTED;
 }
 
 isc_result_t
@@ -934,14 +925,14 @@ dst_gssapi_acceptctx(dns_gss_cred_id_t cred, const char *gssapi_keytab,
 	UNUSED(principal);
 	UNUSED(mctx);
 
-	return (ISC_R_NOTIMPLEMENTED);
+	return ISC_R_NOTIMPLEMENTED;
 }
 
 isc_result_t
 dst_gssapi_deletectx(isc_mem_t *mctx, dns_gss_ctx_id_t *gssctx) {
 	UNUSED(mctx);
 	UNUSED(gssctx);
-	return (ISC_R_NOTIMPLEMENTED);
+	return ISC_R_NOTIMPLEMENTED;
 }
 
 char *
@@ -949,7 +940,7 @@ gss_error_tostring(uint32_t major, uint32_t minor, char *buf, size_t buflen) {
 	snprintf(buf, buflen, "GSSAPI error: Major = %u, Minor = %u.", major,
 		 minor);
 
-	return (buf);
+	return buf;
 }
 
 #endif

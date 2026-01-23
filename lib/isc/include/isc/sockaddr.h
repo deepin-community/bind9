@@ -25,14 +25,13 @@
 
 /*
  * Any updates to this structure should also be applied in
- * contrib/modules/dlz/dlz_minmal.h.
+ * https://gitlab.isc.org/isc-projects/dlz-modules/-/raw/main/modules/include/dlz_minimal.h
  */
 struct isc_sockaddr {
 	union {
-		struct sockaddr		sa;
-		struct sockaddr_in	sin;
-		struct sockaddr_in6	sin6;
-		struct sockaddr_storage ss;
+		struct sockaddr	    sa;
+		struct sockaddr_in  sin;
+		struct sockaddr_in6 sin6;
 	} type;
 	unsigned int length; /* XXXRTH beginning? */
 	ISC_LINK(struct isc_sockaddr) link;
@@ -240,6 +239,13 @@ isc_sockaddr_fromsockaddr(isc_sockaddr_t *isa, const struct sockaddr *sa);
 	       "YYYYY")
 /*%<
  * Minimum size of array to pass to isc_sockaddr_format().
+ */
+
+bool
+isc_sockaddr_disabled(const isc_sockaddr_t *sockaddr);
+/*%<
+ * Report whether or not the address family of 'sockaddr'
+ * has been disabled.
  */
 
 ISC_LANG_ENDDECLS

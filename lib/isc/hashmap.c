@@ -32,7 +32,6 @@
 
 #include <isc/ascii.h>
 #include <isc/atomic.h>
-#include <isc/entropy.h>
 #include <isc/hash.h>
 #include <isc/hashmap.h>
 #include <isc/magic.h>
@@ -117,18 +116,18 @@ under_threshold(isc_hashmap_t *hashmap);
 
 static uint8_t
 hashmap_nexttable(uint8_t idx) {
-	return ((idx == 0) ? 1 : 0);
+	return (idx == 0) ? 1 : 0;
 }
 
 static bool
 rehashing_in_progress(const isc_hashmap_t *hashmap) {
-	return (hashmap->tables[hashmap_nexttable(hashmap->hindex)].table !=
-		NULL);
+	return hashmap->tables[hashmap_nexttable(hashmap->hindex)].table !=
+	       NULL;
 }
 
 static bool
 try_nexttable(const isc_hashmap_t *hashmap, uint8_t idx) {
-	return (idx == hashmap->hindex && rehashing_in_progress(hashmap));
+	return idx == hashmap->hindex && rehashing_in_progress(hashmap);
 }
 
 static void
@@ -276,7 +275,7 @@ nexttable:
 			if (match(node->value, key)) {
 				*pslp = psl;
 				*idxp = idx;
-				return (node);
+				return node;
 			}
 		}
 
@@ -287,7 +286,7 @@ nexttable:
 		goto nexttable;
 	}
 
-	return (NULL);
+	return NULL;
 }
 
 isc_result_t
@@ -300,17 +299,18 @@ isc_hashmap_find(const isc_hashmap_t *hashmap, const uint32_t hashval,
 	hashmap_node_t *node = hashmap_find(hashmap, hashval, match, key,
 					    &(uint32_t){ 0 }, &idx);
 	if (node == NULL) {
-		return (ISC_R_NOTFOUND);
+		return ISC_R_NOTFOUND;
 	}
 
 	INSIST(node->key != NULL);
 	SET_IF_NOT_NULL(valuep, node->value);
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static bool
 hashmap_delete_node(isc_hashmap_t *hashmap, hashmap_node_t *entry,
-		    uint32_t hashval, uint32_t psl, const uint8_t idx) {
+		    uint32_t hashval, uint32_t psl, const uint8_t idx,
+		    size_t size) {
 	uint32_t pos;
 	uint32_t hash;
 	bool last = false;
@@ -318,7 +318,7 @@ hashmap_delete_node(isc_hashmap_t *hashmap, hashmap_node_t *entry,
 	hashmap->count--;
 
 	hash = isc_hash_bits32(hashval, hashmap->tables[idx].hashbits);
-	pos = hash + psl;
+	pos = (hash + psl) & hashmap->tables[idx].hashmask;
 
 	while (true) {
 		hashmap_node_t *node = NULL;
@@ -332,7 +332,7 @@ hashmap_delete_node(isc_hashmap_t *hashmap, hashmap_node_t *entry,
 			break;
 		}
 
-		if (pos == 0) {
+		if ((pos % size) == 0) {
 			last = true;
 		}
 
@@ -342,7 +342,7 @@ hashmap_delete_node(isc_hashmap_t *hashmap, hashmap_node_t *entry,
 	}
 
 	*entry = (hashmap_node_t){ 0 };
-	return (last);
+	return last;
 }
 
 static void
@@ -373,7 +373,7 @@ hashmap_rehash_one(isc_hashmap_t *hashmap) {
 	node = oldtable[hashmap->hiter];
 
 	(void)hashmap_delete_node(hashmap, &oldtable[hashmap->hiter],
-				  node.hashval, node.psl, oldidx);
+				  node.hashval, node.psl, oldidx, UINT32_MAX);
 
 	isc_result_t result = hashmap_add(hashmap, node.hashval, NULL, node.key,
 					  node.value, NULL, hashmap->hindex);
@@ -398,7 +398,7 @@ grow_bits(isc_hashmap_t *hashmap) {
 		newbits = HASHMAP_MAX_BITS;
 	}
 
-	return (newbits);
+	return newbits;
 }
 
 static uint32_t
@@ -409,7 +409,7 @@ shrink_bits(isc_hashmap_t *hashmap) {
 		newbits = HASHMAP_MIN_BITS;
 	}
 
-	return (newbits);
+	return newbits;
 }
 
 static void
@@ -470,31 +470,32 @@ isc_hashmap_delete(isc_hashmap_t *hashmap, const uint32_t hashval,
 	node = hashmap_find(hashmap, hashval, match, key, &psl, &idx);
 	if (node != NULL) {
 		INSIST(node->key != NULL);
-		(void)hashmap_delete_node(hashmap, node, hashval, psl, idx);
+		(void)hashmap_delete_node(hashmap, node, hashval, psl, idx,
+					  UINT32_MAX);
 		result = ISC_R_SUCCESS;
 	}
 
-	return (result);
+	return result;
 }
 
 static bool
 over_threshold(isc_hashmap_t *hashmap) {
 	uint32_t bits = hashmap->tables[hashmap->hindex].hashbits;
 	if (bits == HASHMAP_MAX_BITS) {
-		return (false);
+		return false;
 	}
 	size_t threshold = APPROX_90_PERCENT(HASHSIZE(bits));
-	return (hashmap->count > threshold);
+	return hashmap->count > threshold;
 }
 
 static bool
 under_threshold(isc_hashmap_t *hashmap) {
 	uint32_t bits = hashmap->tables[hashmap->hindex].hashbits;
 	if (bits == HASHMAP_MIN_BITS) {
-		return (false);
+		return false;
 	}
 	size_t threshold = APPROX_20_PERCENT(HASHSIZE(bits));
-	return (hashmap->count < threshold);
+	return hashmap->count < threshold;
 }
 
 static isc_result_t
@@ -528,7 +529,7 @@ hashmap_add(isc_hashmap_t *hashmap, const uint32_t hashval,
 		if (current->hashval == hashval) {
 			if (match != NULL && match(current->value, key)) {
 				SET_IF_NOT_NULL(foundp, current->value);
-				return (ISC_R_EXISTS);
+				return ISC_R_EXISTS;
 			}
 		}
 
@@ -558,7 +559,7 @@ hashmap_add(isc_hashmap_t *hashmap, const uint32_t hashval,
 	/* We found an empty place, store entry into current node */
 	*current = node;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 isc_result_t
@@ -585,12 +586,12 @@ isc_hashmap_add(isc_hashmap_t *hashmap, const uint32_t hashval,
 		if (found != NULL) {
 			INSIST(found->key != NULL);
 			SET_IF_NOT_NULL(foundp, found->value);
-			return (ISC_R_EXISTS);
+			return ISC_R_EXISTS;
 		}
 	}
 
-	return (hashmap_add(hashmap, hashval, match, key, value, foundp,
-			    hashmap->hindex));
+	return hashmap_add(hashmap, hashval, match, key, value, foundp,
+			   hashmap->hindex);
 }
 
 void
@@ -639,17 +640,17 @@ isc__hashmap_iter_next(isc_hashmap_iter_t *iter) {
 	if (iter->i < iter->size) {
 		iter->cur = &hashmap->tables[iter->hindex].table[iter->i];
 
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 
 	if (try_nexttable(hashmap, iter->hindex)) {
 		iter->hindex = hashmap_nexttable(iter->hindex);
-		iter->i = 0;
+		iter->i = hashmap->hiter;
 		iter->size = hashmap->tables[iter->hindex].size;
-		return (isc__hashmap_iter_next(iter));
+		return isc__hashmap_iter_next(iter);
 	}
 
-	return (ISC_R_NOMORE);
+	return ISC_R_NOMORE;
 }
 
 isc_result_t
@@ -660,7 +661,7 @@ isc_hashmap_iter_first(isc_hashmap_iter_t *iter) {
 	iter->i = 0;
 	iter->size = iter->hashmap->tables[iter->hashmap->hindex].size;
 
-	return (isc__hashmap_iter_next(iter));
+	return isc__hashmap_iter_next(iter);
 }
 
 isc_result_t
@@ -670,7 +671,7 @@ isc_hashmap_iter_next(isc_hashmap_iter_t *iter) {
 
 	iter->i++;
 
-	return (isc__hashmap_iter_next(iter));
+	return isc__hashmap_iter_next(iter);
 }
 
 isc_result_t
@@ -682,7 +683,7 @@ isc_hashmap_iter_delcurrent_next(isc_hashmap_iter_t *iter) {
 		&iter->hashmap->tables[iter->hindex].table[iter->i];
 
 	if (hashmap_delete_node(iter->hashmap, node, node->hashval, node->psl,
-				iter->hindex))
+				iter->hindex, iter->size))
 	{
 		/*
 		 * We have seen the new last element so reduce the size
@@ -692,7 +693,7 @@ isc_hashmap_iter_delcurrent_next(isc_hashmap_iter_t *iter) {
 		iter->size--;
 	}
 
-	return (isc__hashmap_iter_next(iter));
+	return isc__hashmap_iter_next(iter);
 }
 
 void
@@ -717,5 +718,5 @@ unsigned int
 isc_hashmap_count(isc_hashmap_t *hashmap) {
 	REQUIRE(ISC_HASHMAP_VALID(hashmap));
 
-	return (hashmap->count);
+	return hashmap->count;
 }

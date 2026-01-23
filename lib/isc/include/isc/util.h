@@ -79,6 +79,8 @@
 
 #define ISC_CLAMP(v, x, y) ((v) < (x) ? (x) : ((v) > (y) ? (y) : (v)))
 
+#define ISC_MAX3(a, b, c) ISC_MAX(ISC_MAX((a), (b)), (c))
+
 /*%
  * The UNCONST() macro can be used to omit warnings produced by certain
  * compilers when operating with pointers declared with the const type qual-
@@ -382,6 +384,29 @@ mock_assert(const int result, const char *const expression,
 
 #endif /* UNIT_TESTING */
 
+/*
+ * Check for ISC_R_SUCCESS. On any other result, jump to a cleanup
+ * label. (This macro requires the function to define `result`
+ * and `cleanup:`.)
+ */
+#define CHECK(r)                             \
+	do {                                 \
+		result = (r);                \
+		if (result != ISC_R_SUCCESS) \
+			goto cleanup;        \
+	} while (0)
+
+/*
+ * Check for ISC_R_SUCCESS and continue if found. For any other
+ * result, return the result.
+ */
+#define RETERR(x)                        \
+	do {                             \
+		isc_result_t _r = (x);   \
+		if (_r != ISC_R_SUCCESS) \
+			return ((_r));   \
+	} while (0)
+
 /*%
  * Runtime check which logs the error value returned by a POSIX Threads
  * function and the error string that corresponds to it
@@ -395,9 +420,9 @@ mock_assert(const int result, const char *const expression,
  * Alignment
  */
 #ifdef __GNUC__
-#define ISC_ALIGN(x, a) (((x) + (a)-1) & ~((typeof(x))(a)-1))
+#define ISC_ALIGN(x, a) (((x) + (a) - 1) & ~((typeof(x))(a) - 1))
 #else /* ifdef __GNUC__ */
-#define ISC_ALIGN(x, a) (((x) + (a)-1) & ~((uintmax_t)(a)-1))
+#define ISC_ALIGN(x, a) (((x) + (a) - 1) & ~((uintmax_t)(a) - 1))
 #endif /* ifdef __GNUC__ */
 
 /*%

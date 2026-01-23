@@ -39,7 +39,6 @@ check_PROGRAMS =	\
 	proxyudp_test	\
 	quota_test	\
 	radix_test	\
-	random_test	\
 	ratelimiter_test\
 	regex_test	\
 	result_test	\
@@ -88,6 +87,10 @@ dnsstream_utils_test_SOURCES =	\
 	dnsstream_utils_test.c \
 	dnsstream_utils_test_data.h
 
+hashmap_test_SOURCES =	\
+	hashmap_test.c	\
+	hashmap_nodes.h
+
 hmac_test_CPPFLAGS =	\
 	$(AM_CPPFLAGS)	\
 	$(OPENSSL_CFLAGS)
@@ -115,10 +118,12 @@ proxyheader_test_SOURCES =	\
 	proxyheader_test_data.h
 
 proxystream_test_CPPFLAGS =	\
-	$(AM_CPPFLAGS)
+	$(AM_CPPFLAGS)		\
+	$(OPENSSL_CFLAGS)
 
 proxystream_test_LDADD =	\
-	$(LDADD)
+	$(LDADD)		\
+	$(OPENSSL_LIBS)
 
 proxystream_test_SOURCES =	\
 	proxystream_test.c \
@@ -139,10 +144,6 @@ proxyudp_test_SOURCES =	\
 	netmgr_common.h \
 	netmgr_common.c \
 	uv_wrap.h
-
-random_test_LDADD =	\
-	$(LDADD)	\
-	-lm
 
 tcp_test_CPPFLAGS =	\
 	$(AM_CPPFLAGS)	\

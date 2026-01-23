@@ -52,10 +52,10 @@
 
 #include "openssl_shim.h"
 
-#define DST_RET(a)        \
-	{                 \
-		ret = a;  \
-		goto err; \
+#define DST_RET(a)            \
+	{                     \
+		result = a;   \
+		goto cleanup; \
 	}
 
 #if !defined(OPENSSL_NO_ENGINE) && OPENSSL_API_LEVEL < 30000
@@ -74,7 +74,7 @@ enable_fips_mode(void) {
 
 	if (isc_fips_set_mode(1) != ISC_R_SUCCESS) {
 		dst__openssl_toresult2("FIPS_mode_set", DST_R_OPENSSLFAILURE);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 #endif
 }
@@ -88,7 +88,7 @@ dst__openssl_init(const char *engine) {
 	}
 
 	if (engine == NULL) {
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 
 #if !defined(OPENSSL_NO_ENGINE) && OPENSSL_API_LEVEL < 30000
@@ -103,7 +103,7 @@ dst__openssl_init(const char *engine) {
 	if (!ENGINE_set_default(global_engine, ENGINE_METHOD_ALL)) {
 		goto cleanup_init;
 	}
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 cleanup_init:
 	ENGINE_finish(global_engine);
 cleanup_rm:
@@ -113,7 +113,7 @@ cleanup_rm:
 	ERR_clear_error();
 	global_engine = NULL;
 #endif /* if !defined(OPENSSL_NO_ENGINE) && OPENSSL_API_LEVEL < 30000 */
-	return (DST_R_NOENGINE);
+	return DST_R_NOENGINE;
 }
 
 void
@@ -156,7 +156,7 @@ toresult(isc_result_t fallback) {
 		break;
 	}
 
-	return (result);
+	return result;
 }
 
 isc_result_t
@@ -166,14 +166,14 @@ dst__openssl_toresult(isc_result_t fallback) {
 	result = toresult(fallback);
 
 	ERR_clear_error();
-	return (result);
+	return result;
 }
 
 isc_result_t
 dst___openssl_toresult2(const char *funcname, isc_result_t fallback,
 			const char *file, int line) {
-	return (dst___openssl_toresult3(DNS_LOGCATEGORY_GENERAL, funcname,
-					fallback, file, line));
+	return dst___openssl_toresult3(DNS_LOGCATEGORY_GENERAL, funcname,
+				       fallback, file, line);
 }
 
 isc_result_t
@@ -208,22 +208,22 @@ dst___openssl_toresult3(isc_logcategory_t *category, const char *funcname,
 
 done:
 	ERR_clear_error();
-	return (result);
+	return result;
 }
 
 #if !defined(OPENSSL_NO_ENGINE) && OPENSSL_API_LEVEL < 30000
 ENGINE *
 dst__openssl_getengine(const char *engine) {
 	if (engine == NULL) {
-		return (NULL);
+		return NULL;
 	}
 	if (global_engine == NULL) {
-		return (NULL);
+		return NULL;
 	}
 	if (strcmp(engine, ENGINE_get_id(global_engine)) == 0) {
-		return (global_engine);
+		return global_engine;
 	}
-	return (NULL);
+	return NULL;
 }
 #endif /* if !defined(OPENSSL_NO_ENGINE) && OPENSSL_API_LEVEL < 30000 */
 
@@ -232,7 +232,7 @@ dst__openssl_fromlabel_engine(int key_base_id, const char *engine,
 			      const char *label, const char *pin,
 			      EVP_PKEY **ppub, EVP_PKEY **ppriv) {
 #if !defined(OPENSSL_NO_ENGINE) && OPENSSL_API_LEVEL < 30000
-	isc_result_t ret = ISC_R_SUCCESS;
+	isc_result_t result = ISC_R_SUCCESS;
 	ENGINE *e = NULL;
 
 	UNUSED(pin);
@@ -259,8 +259,8 @@ dst__openssl_fromlabel_engine(int key_base_id, const char *engine,
 	if (EVP_PKEY_base_id(*ppriv) != key_base_id) {
 		DST_RET(DST_R_BADKEYTYPE);
 	}
-err:
-	return (ret);
+cleanup:
+	return result;
 #else  /* if !defined(OPENSSL_NO_ENGINE) && OPENSSL_API_LEVEL < 30000 */
 	UNUSED(key_base_id);
 	UNUSED(engine);
@@ -268,7 +268,7 @@ err:
 	UNUSED(pin);
 	UNUSED(ppub);
 	UNUSED(ppriv);
-	return (DST_R_NOENGINE);
+	return DST_R_NOENGINE;
 #endif /* if !defined(OPENSSL_NO_ENGINE) && OPENSSL_API_LEVEL < 30000 */
 }
 
@@ -277,7 +277,7 @@ dst__openssl_fromlabel_provider(int key_base_id, const char *label,
 				const char *pin, EVP_PKEY **ppub,
 				EVP_PKEY **ppriv) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	isc_result_t ret = DST_R_OPENSSLFAILURE;
+	isc_result_t result = DST_R_OPENSSLFAILURE;
 	OSSL_STORE_CTX *ctx = NULL;
 
 	UNUSED(pin);
@@ -319,18 +319,18 @@ dst__openssl_fromlabel_provider(int key_base_id, const char *label,
 		OSSL_STORE_INFO_free(info);
 	}
 	if (*ppriv != NULL && *ppub != NULL) {
-		ret = ISC_R_SUCCESS;
+		result = ISC_R_SUCCESS;
 	}
-err:
+cleanup:
 	OSSL_STORE_close(ctx);
-	return (ret);
+	return result;
 #else
 	UNUSED(key_base_id);
 	UNUSED(label);
 	UNUSED(pin);
 	UNUSED(ppub);
 	UNUSED(ppriv);
-	return (DST_R_OPENSSLFAILURE);
+	return DST_R_OPENSSLFAILURE;
 #endif
 }
 
@@ -338,8 +338,8 @@ isc_result_t
 dst__openssl_fromlabel(int key_base_id, const char *engine, const char *label,
 		       const char *pin, EVP_PKEY **ppub, EVP_PKEY **ppriv) {
 	if (engine == NULL) {
-		return (dst__openssl_fromlabel_provider(key_base_id, label, pin,
-							ppub, ppriv));
+		return dst__openssl_fromlabel_provider(key_base_id, label, pin,
+						       ppub, ppriv);
 	}
 
 	if (*ppub != NULL) {
@@ -352,8 +352,8 @@ dst__openssl_fromlabel(int key_base_id, const char *engine, const char *label,
 		*ppriv = NULL;
 	}
 
-	return (dst__openssl_fromlabel_engine(key_base_id, engine, label, pin,
-					      ppub, ppriv));
+	return dst__openssl_fromlabel_engine(key_base_id, engine, label, pin,
+					     ppub, ppriv);
 }
 
 bool
@@ -362,27 +362,27 @@ dst__openssl_keypair_compare(const dst_key_t *key1, const dst_key_t *key2) {
 	EVP_PKEY *pkey2 = key2->keydata.pkeypair.pub;
 
 	if (pkey1 == pkey2) {
-		return (true);
+		return true;
 	} else if (pkey1 == NULL || pkey2 == NULL) {
-		return (false);
+		return false;
 	}
 
 	/* `EVP_PKEY_eq` checks only the public components and parameters. */
 	if (EVP_PKEY_eq(pkey1, pkey2) != 1) {
-		return (false);
+		return false;
 	}
 	/* The private key presence must be same for keys to match. */
 	if ((key1->keydata.pkeypair.priv != NULL) !=
 	    (key2->keydata.pkeypair.priv != NULL))
 	{
-		return (false);
+		return false;
 	}
-	return (true);
+	return true;
 }
 
 bool
 dst__openssl_keypair_isprivate(const dst_key_t *key) {
-	return (key->keydata.pkeypair.priv != NULL);
+	return key->keydata.pkeypair.priv != NULL;
 }
 
 void

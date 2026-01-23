@@ -16,7 +16,6 @@
 #include <stddef.h>
 
 #include <isc/ascii.h>
-#include <isc/entropy.h>
 #include <isc/hash.h> /* IWYU pragma: keep */
 #include <isc/random.h>
 #include <isc/result.h>
@@ -35,7 +34,7 @@ isc__hash_initialize(void) {
 	 */
 	uint8_t key[16] = { 1 };
 #if !FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-	isc_entropy_get(key, sizeof(key));
+	isc_random_buf(key, sizeof(key));
 #endif /* if FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION */
 	STATIC_ASSERT(sizeof(key) >= sizeof(isc_hash_key),
 		      "sizeof(key) < sizeof(isc_hash_key)");
@@ -44,7 +43,7 @@ isc__hash_initialize(void) {
 
 const void *
 isc_hash_get_initializer(void) {
-	return (isc_hash_key);
+	return isc_hash_key;
 }
 
 void
@@ -73,7 +72,7 @@ isc_hash32_finalize(isc_hash32_t *restrict state) {
 
 	isc_halfsiphash24_finalize(state, (uint8_t *)&hval);
 
-	return (hval);
+	return hval;
 }
 
 void
@@ -95,5 +94,5 @@ isc_hash64_finalize(isc_hash64_t *restrict state) {
 
 	isc_siphash24_finalize(state, (uint8_t *)&hval);
 
-	return (hval);
+	return hval;
 }

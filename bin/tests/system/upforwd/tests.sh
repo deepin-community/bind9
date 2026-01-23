@@ -389,7 +389,7 @@ if test -f keyname; then
   nextpart_thrice
   ret=0
   keyname=$(cat keyname)
-  $NSUPDATE -k $keyname.private -- - <<EOF || ret=1
+  $NSUPDATE -k $keyname.private -- - <<EOF >nsupdate.out.test$n 2>&1 || ret=1
 	local 10.53.0.1
 	server 10.53.0.3 ${PORT}
 	zone example2
@@ -404,7 +404,7 @@ EOF
   n=$((n + 1))
   wait_for_log_thrice
 
-  $DIG -p ${PORT} unsigned.example2 A @10.53.0.1 >dig.out.ns1.test$n
+  $DIG -p ${PORT} unsigned.example2 A @10.53.0.1 >dig.out.ns1.test$n || ret=1
   grep "status: NOERROR" dig.out.ns1.test$n >/dev/null || ret=1
   if [ $ret != 0 ]; then echo_i "failed"; fi
   status=$((status + ret))
@@ -424,7 +424,7 @@ EOF
   nextpart_thrice
   ret=0
   keyname=$(cat keyname)
-  $NSUPDATE -k $keyname.private -S -O -- - <<EOF || ret=1
+  $NSUPDATE -k $keyname.private -S -O -- - <<EOF >nsupdate.out.test$n 2>&1 || ret=1
         local 10.53.0.1
 	server 10.53.0.3 ${TLSPORT}
 	zone example2
@@ -439,7 +439,7 @@ EOF
   n=$((n + 1))
   wait_for_log_thrice
 
-  $DIG -p ${PORT} unsigned-dot.example2 A @10.53.0.1 >dig.out.ns1.test$n
+  $DIG -p ${PORT} unsigned-dot.example2 A @10.53.0.1 >dig.out.ns1.test$n || ret=1
   grep "status: NOERROR" dig.out.ns1.test$n >/dev/null || ret=1
   if [ $ret != 0 ]; then echo_i "failed"; fi
   status=$((status + ret))
@@ -454,6 +454,28 @@ EOF
     status=$((status + ret))
     n=$((n + 1))
   fi
+
+  echo_i "checking update forwarding with sig0 with too many keys ($n)"
+  nextpart_thrice
+  ret=0
+  good=0
+  bad=0
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17; do
+    keyname=$(cat keyname$i)
+    $NSUPDATE -d -D -k $keyname.private -- - <<EOF >nsupdate.out.test$n.$i 2>&1 && good=$((good + 1)) || bad=$((bad + 1))
+	local 10.53.0.1
+	server 10.53.0.3 ${PORT}
+	zone example2-toomanykeys
+	update add toomanykeys$i.example2-toomanykeys. 600 A 10.10.10.1
+	send
+EOF
+  done
+  # There are 17 keys in the zone but by default named checks maximum 16 keys
+  # to find a matching key, so one of these updates should have been failed.
+  [ $good = 16 ] && [ $bad = 1 ] || ret=1
+  if [ $ret != 0 ]; then echo_i "failed"; fi
+  status=$((status + ret))
+  n=$((n + 1))
 fi
 
 echo_i "attempting an update that should be rejected by ACL ($n)"
@@ -516,7 +538,7 @@ n=$((n + 1))
 ret=0
 echo_i "attempting updates that should exceed quota ($n)"
 # lower the update quota to 1.
-copy_setports ns3/named2.conf.in ns3/named.conf
+cp ns3/named2.conf ns3/named.conf
 rndc_reconfig ns3 10.53.0.3
 nextpart ns3/named.run >/dev/null
 for loop in 1 2 3 4 5 6 7 8 9 10; do

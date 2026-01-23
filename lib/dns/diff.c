@@ -15,6 +15,7 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdlib.h>
 
 #include <isc/buffer.h>
@@ -24,6 +25,7 @@
 #include <isc/string.h>
 #include <isc/util.h>
 
+#include <dns/callbacks.h>
 #include <dns/db.h>
 #include <dns/diff.h>
 #include <dns/log.h>
@@ -34,20 +36,12 @@
 #include <dns/rdatatype.h>
 #include <dns/time.h>
 
-#define CHECK(op)                            \
-	do {                                 \
-		result = (op);               \
-		if (result != ISC_R_SUCCESS) \
-			goto failure;        \
-	} while (0)
-
 #define DIFF_COMMON_LOGARGS \
 	dns_lctx, DNS_LOGCATEGORY_GENERAL, DNS_LOGMODULE_DIFF
 
 static dns_rdatatype_t
 rdata_covers(dns_rdata_t *rdata) {
-	return (rdata->type == dns_rdatatype_rrsig ? dns_rdata_covers(rdata)
-						   : 0);
+	return rdata->type == dns_rdatatype_rrsig ? dns_rdata_covers(rdata) : 0;
 }
 
 isc_result_t
@@ -98,7 +92,7 @@ dns_difftuple_create(isc_mem_t *mctx, dns_diffop_t op, const dns_name_t *name,
 	INSIST(datap == (unsigned char *)t + size);
 
 	*tp = t;
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 void
@@ -118,8 +112,8 @@ dns_difftuple_free(dns_difftuple_t **tp) {
 
 isc_result_t
 dns_difftuple_copy(dns_difftuple_t *orig, dns_difftuple_t **copyp) {
-	return (dns_difftuple_create(orig->mctx, orig->op, &orig->name,
-				     orig->ttl, &orig->rdata, copyp));
+	return dns_difftuple_create(orig->mctx, orig->op, &orig->name,
+				    orig->ttl, &orig->rdata, copyp);
 }
 
 void
@@ -127,6 +121,7 @@ dns_diff_init(isc_mem_t *mctx, dns_diff_t *diff) {
 	diff->mctx = mctx;
 	ISC_LIST_INIT(diff->tuples);
 	diff->magic = DNS_DIFF_MAGIC;
+	diff->size = 0;
 }
 
 void
@@ -137,13 +132,35 @@ dns_diff_clear(dns_diff_t *diff) {
 		ISC_LIST_UNLINK(diff->tuples, t, link);
 		dns_difftuple_free(&t);
 	}
+	diff->size = 0;
 	ENSURE(ISC_LIST_EMPTY(diff->tuples));
 }
 
 void
 dns_diff_append(dns_diff_t *diff, dns_difftuple_t **tuplep) {
+	REQUIRE(DNS_DIFF_VALID(diff));
 	ISC_LIST_APPEND(diff->tuples, *tuplep, link);
+	diff->size += 1;
 	*tuplep = NULL;
+}
+
+bool
+dns_diff_is_boundary(const dns_diff_t *diff, dns_name_t *new_name) {
+	REQUIRE(DNS_DIFF_VALID(diff));
+	REQUIRE(DNS_NAME_VALID(new_name));
+
+	if (ISC_LIST_EMPTY(diff->tuples)) {
+		return false;
+	}
+
+	dns_difftuple_t *tail = ISC_LIST_TAIL(diff->tuples);
+	return !dns_name_caseequal(&tail->name, new_name);
+}
+
+size_t
+dns_diff_size(const dns_diff_t *diff) {
+	REQUIRE(DNS_DIFF_VALID(diff));
+	return diff->size;
 }
 
 /* XXX this is O(N) */
@@ -174,6 +191,9 @@ dns_diff_appendminimal(dns_diff_t *diff, dns_difftuple_t **tuplep) {
 		    ot->ttl == (*tuplep)->ttl)
 		{
 			ISC_LIST_UNLINK(diff->tuples, ot, link);
+			INSIST(diff->size > 0);
+			diff->size -= 1;
+
 			if ((*tuplep)->op == ot->op) {
 				UNEXPECTED_ERROR("unexpected non-minimal diff");
 			} else {
@@ -186,6 +206,7 @@ dns_diff_appendminimal(dns_diff_t *diff, dns_difftuple_t **tuplep) {
 
 	if (*tuplep != NULL) {
 		ISC_LIST_APPEND(diff->tuples, *tuplep, link);
+		diff->size += 1;
 		*tuplep = NULL;
 	}
 }
@@ -223,7 +244,7 @@ setresign(dns_rdataset_t *modified) {
 		result = dns_rdataset_next(modified);
 	}
 	INSIST(result == ISC_R_NOMORE);
-	return ((isc_stdtime_t)when);
+	return (isc_stdtime_t)when;
 }
 
 static void
@@ -240,8 +261,25 @@ setownercase(dns_rdataset_t *rdataset, const dns_name_t *name) {
 	}
 }
 
+static const char *
+optotext(dns_diffop_t op) {
+	switch (op) {
+	case DNS_DIFFOP_ADD:
+		return "add";
+	case DNS_DIFFOP_ADDRESIGN:
+		return "add-resign";
+	case DNS_DIFFOP_DEL:
+		return "del";
+	case DNS_DIFFOP_DELRESIGN:
+		return "del-resign";
+	default:
+		return "unknown";
+	}
+}
+
 static isc_result_t
-diff_apply(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver, bool warn) {
+diff_apply(const dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver,
+	   bool warn) {
 	dns_difftuple_t *t;
 	dns_dbnode_t *node = NULL;
 	isc_result_t result;
@@ -269,6 +307,7 @@ diff_apply(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver, bool warn) {
 
 		while (t != NULL && dns_name_equal(&t->name, name)) {
 			dns_rdatatype_t type, covers;
+			dns_rdataclass_t rdclass;
 			dns_diffop_t op;
 			dns_rdatalist_t rdl;
 			dns_rdataset_t rds;
@@ -277,6 +316,7 @@ diff_apply(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver, bool warn) {
 
 			op = t->op;
 			type = t->rdata.type;
+			rdclass = t->rdata.rdclass;
 			covers = rdata_covers(&t->rdata);
 
 			/*
@@ -439,6 +479,22 @@ diff_apply(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver, bool warn) {
 					dns_rdataset_disassociate(&ardataset);
 				}
 			} else {
+				if (result == DNS_R_NOTEXACT) {
+					dns_name_format(name, namebuf,
+							sizeof(namebuf));
+					dns_rdatatype_format(type, typebuf,
+							     sizeof(typebuf));
+					dns_rdataclass_format(rdclass, classbuf,
+							      sizeof(classbuf));
+					isc_log_write(
+						DIFF_COMMON_LOGARGS,
+						ISC_LOG_ERROR,
+						"dns_diff_apply: %s/%s/%s: %s "
+						"%s",
+						namebuf, typebuf, classbuf,
+						optotext(op),
+						isc_result_totext(result));
+				}
 				if (dns_rdataset_isassociated(&ardataset)) {
 					dns_rdataset_disassociate(&ardataset);
 				}
@@ -450,34 +506,38 @@ diff_apply(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver, bool warn) {
 			}
 		}
 	}
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 
-failure:
+cleanup:
 	if (node != NULL) {
 		dns_db_detachnode(db, &node);
 	}
-	return (result);
+	return result;
 }
 
 isc_result_t
-dns_diff_apply(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver) {
-	return (diff_apply(diff, db, ver, true));
+dns_diff_apply(const dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver) {
+	return diff_apply(diff, db, ver, true);
 }
 
 isc_result_t
-dns_diff_applysilently(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *ver) {
-	return (diff_apply(diff, db, ver, false));
+dns_diff_applysilently(const dns_diff_t *diff, dns_db_t *db,
+		       dns_dbversion_t *ver) {
+	return diff_apply(diff, db, ver, false);
 }
 
 /* XXX this duplicates lots of code in diff_apply(). */
 
 isc_result_t
-dns_diff_load(dns_diff_t *diff, dns_addrdatasetfunc_t addfunc,
-	      void *add_private) {
+dns_diff_load(const dns_diff_t *diff, dns_rdatacallbacks_t *callbacks) {
 	dns_difftuple_t *t;
 	isc_result_t result;
 
 	REQUIRE(DNS_DIFF_VALID(diff));
+
+	if (callbacks->setup != NULL) {
+		callbacks->setup(callbacks->add_private);
+	}
 
 	t = ISC_LIST_HEAD(diff->tuples);
 	while (t != NULL) {
@@ -517,8 +577,8 @@ dns_diff_load(dns_diff_t *diff, dns_addrdatasetfunc_t addfunc,
 			rds.trust = dns_trust_ultimate;
 
 			INSIST(op == DNS_DIFFOP_ADD);
-			result = (*addfunc)(add_private, name,
-					    &rds DNS__DB_FILELINE);
+			result = callbacks->add(callbacks->add_private, name,
+						&rds DNS__DB_FILELINE);
 			if (result == DNS_R_UNCHANGED) {
 				isc_log_write(DIFF_COMMON_LOGARGS,
 					      ISC_LOG_WARNING,
@@ -536,8 +596,12 @@ dns_diff_load(dns_diff_t *diff, dns_addrdatasetfunc_t addfunc,
 		}
 	}
 	result = ISC_R_SUCCESS;
-failure:
-	return (result);
+
+cleanup:
+	if (callbacks->commit != NULL) {
+		callbacks->commit(callbacks->add_private);
+	}
+	return result;
 }
 
 /*
@@ -558,7 +622,7 @@ dns_diff_sort(dns_diff_t *diff, dns_diff_compare_func *compare) {
 		length++;
 	}
 	if (length == 0) {
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 	v = isc_mem_cget(diff->mctx, length, sizeof(dns_difftuple_t *));
 	for (i = 0; i < length; i++) {
@@ -572,7 +636,7 @@ dns_diff_sort(dns_diff_t *diff, dns_diff_compare_func *compare) {
 		ISC_LIST_APPEND(diff->tuples, v[i], link);
 	}
 	isc_mem_cput(diff->mctx, v, length, sizeof(dns_difftuple_t *));
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 /*
@@ -600,7 +664,7 @@ diff_tuple_tordataset(dns_difftuple_t *t, dns_rdata_t *rdata,
 }
 
 isc_result_t
-dns_diff_print(dns_diff_t *diff, FILE *file) {
+dns_diff_print(const dns_diff_t *diff, FILE *file) {
 	isc_result_t result;
 	dns_difftuple_t *t;
 	char *mem = NULL;
@@ -609,66 +673,74 @@ dns_diff_print(dns_diff_t *diff, FILE *file) {
 
 	REQUIRE(DNS_DIFF_VALID(diff));
 
-	mem = isc_mem_get(diff->mctx, size);
+	int required_log_level = ISC_LOG_DEBUG(7);
 
-	for (t = ISC_LIST_HEAD(diff->tuples); t != NULL;
-	     t = ISC_LIST_NEXT(t, link))
-	{
-		isc_buffer_t buf;
-		isc_region_t r;
+	/*
+	 * Logging requires allocating a buffer and some costly translation to
+	 * text. Avoid it if possible.
+	 */
+	if (isc_log_wouldlog(dns_lctx, required_log_level) || file != NULL) {
+		mem = isc_mem_get(diff->mctx, size);
 
-		dns_rdatalist_t rdl;
-		dns_rdataset_t rds;
-		dns_rdata_t rd = DNS_RDATA_INIT;
+		for (t = ISC_LIST_HEAD(diff->tuples); t != NULL;
+		     t = ISC_LIST_NEXT(t, link))
+		{
+			isc_buffer_t buf;
+			isc_region_t r;
 
-		diff_tuple_tordataset(t, &rd, &rdl, &rds);
-	again:
-		isc_buffer_init(&buf, mem, size);
-		result = dns_rdataset_totext(&rds, &t->name, false, false,
-					     &buf);
+			dns_rdatalist_t rdl;
+			dns_rdataset_t rds;
+			dns_rdata_t rd = DNS_RDATA_INIT;
 
-		if (result == ISC_R_NOSPACE) {
-			isc_mem_put(diff->mctx, mem, size);
-			size += 1024;
-			mem = isc_mem_get(diff->mctx, size);
-			goto again;
-		}
+			diff_tuple_tordataset(t, &rd, &rdl, &rds);
+		again:
+			isc_buffer_init(&buf, mem, size);
+			result = dns_rdataset_totext(&rds, &t->name, false,
+						     false, &buf);
 
-		if (result != ISC_R_SUCCESS) {
-			goto cleanup;
-		}
-		/*
-		 * Get rid of final newline.
-		 */
-		INSIST(buf.used >= 1 &&
-		       ((char *)buf.base)[buf.used - 1] == '\n');
-		buf.used--;
+			if (result == ISC_R_NOSPACE) {
+				isc_mem_put(diff->mctx, mem, size);
+				size += 1024;
+				mem = isc_mem_get(diff->mctx, size);
+				goto again;
+			}
 
-		isc_buffer_usedregion(&buf, &r);
-		switch (t->op) {
-		case DNS_DIFFOP_EXISTS:
-			op = "exists";
-			break;
-		case DNS_DIFFOP_ADD:
-			op = "add";
-			break;
-		case DNS_DIFFOP_DEL:
-			op = "del";
-			break;
-		case DNS_DIFFOP_ADDRESIGN:
-			op = "add re-sign";
-			break;
-		case DNS_DIFFOP_DELRESIGN:
-			op = "del re-sign";
-			break;
-		}
-		if (file != NULL) {
-			fprintf(file, "%s %.*s\n", op, (int)r.length,
-				(char *)r.base);
-		} else {
-			isc_log_write(DIFF_COMMON_LOGARGS, ISC_LOG_DEBUG(7),
-				      "%s %.*s", op, (int)r.length,
-				      (char *)r.base);
+			if (result != ISC_R_SUCCESS) {
+				goto cleanup;
+			}
+			/*
+			 * Get rid of final newline.
+			 */
+			INSIST(buf.used >= 1 &&
+			       ((char *)buf.base)[buf.used - 1] == '\n');
+			buf.used--;
+
+			isc_buffer_usedregion(&buf, &r);
+			switch (t->op) {
+			case DNS_DIFFOP_EXISTS:
+				op = "exists";
+				break;
+			case DNS_DIFFOP_ADD:
+				op = "add";
+				break;
+			case DNS_DIFFOP_DEL:
+				op = "del";
+				break;
+			case DNS_DIFFOP_ADDRESIGN:
+				op = "add re-sign";
+				break;
+			case DNS_DIFFOP_DELRESIGN:
+				op = "del re-sign";
+				break;
+			}
+			if (file != NULL) {
+				fprintf(file, "%s %.*s\n", op, (int)r.length,
+					(char *)r.base);
+			} else {
+				isc_log_write(DIFF_COMMON_LOGARGS,
+					      required_log_level, "%s %.*s", op,
+					      (int)r.length, (char *)r.base);
+			}
 		}
 	}
 	result = ISC_R_SUCCESS;
@@ -676,5 +748,5 @@ cleanup:
 	if (mem != NULL) {
 		isc_mem_put(diff->mctx, mem, size);
 	}
-	return (result);
+	return result;
 }

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
@@ -28,14 +28,14 @@ def read_trs_result(filename):
             items = line.split()
             if len(items) < 2:
                 raise ValueError("unsupported line in trs file", filename, line)
-            if items[0] != (":test-result:"):
+            if items[0] != (":global-test-result:"):
                 continue
             if result is not None:
-                raise NotImplementedError("double :test-result:", filename)
+                raise NotImplementedError("double :global-test-result:", filename)
             result = items[1].upper()
 
     if result is None:
-        raise ValueError(":test-result: not found", filename)
+        raise ValueError(":global-test-result: not found", filename)
 
     return result
 
@@ -65,7 +65,13 @@ def walk_trss(source_dir):
             full_trs_path = os.path.join(cur_dir, filename)
             full_log_path = os.path.join(cur_dir, log_name)
             sub_dir = os.path.relpath(cur_dir, source_dir)
-            test_name = os.path.join(sub_dir, filename_prefix)
+            test_dir_path = os.path.join(sub_dir, filename_prefix)
+
+            if sub_dir.startswith("bin/tests/system"):
+                # Match the `pytest` style test names for system tests
+                test_name = f"test_{filename_prefix}"
+            else:
+                test_name = test_dir_path
 
             t = {
                 "name": test_name,
@@ -76,7 +82,7 @@ def walk_trss(source_dir):
 
             # try to find dir/file path for a clickable link
             try:
-                t["rel_file_path"] = find_test_relative_path(source_dir, test_name)
+                t["rel_file_path"] = find_test_relative_path(source_dir, test_dir_path)
             except KeyError:
                 pass  # no existing path found
 

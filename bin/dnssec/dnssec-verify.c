@@ -33,6 +33,7 @@
 #include <isc/stdio.h>
 #include <isc/string.h>
 #include <isc/time.h>
+#include <isc/urcu.h>
 #include <isc/util.h>
 
 #include <dns/db.h>
@@ -109,8 +110,8 @@ loadzone(char *file, char *origin, dns_rdataclass_t rdclass, dns_db_t **db) {
 		      isc_result_totext(result));
 	}
 
-	result = dns_db_create(mctx, "rbt", name, dns_dbtype_zone, rdclass, 0,
-			       NULL, db);
+	result = dns_db_create(mctx, ZONEDB_DEFAULT, name, dns_dbtype_zone,
+			       rdclass, 0, NULL, db);
 	check_result(result, "dns_db_create()");
 
 	result = dns_db_load(*db, file, inputformat, 0);
@@ -137,10 +138,10 @@ loadzone(char *file, char *origin, dns_rdataclass_t rdclass, dns_db_t **db) {
 }
 
 noreturn static void
-usage(void);
+usage(int ret);
 
 static void
-usage(void) {
+usage(int ret) {
 	fprintf(stderr, "Usage:\n");
 	fprintf(stderr, "\t%s [options] zonefile [keys]\n", program);
 
@@ -162,7 +163,7 @@ usage(void) {
 	fprintf(stderr, "\t-x:\tDNSKEY record signed with KSKs only, "
 			"not ZSKs\n");
 	fprintf(stderr, "\t-z:\tAll records signed with KSKs\n");
-	exit(0);
+	exit(ret);
 }
 
 int
@@ -258,11 +259,12 @@ main(int argc, char *argv[]) {
 				fprintf(stderr, "%s: invalid argument -%c\n",
 					program, isc_commandline_option);
 			}
-			FALLTHROUGH;
+			/* Does not return. */
+			usage(EXIT_FAILURE);
 
 		case 'h':
 			/* Does not return. */
-			usage();
+			usage(EXIT_SUCCESS);
 
 		case 'V':
 			/* Does not return. */
@@ -271,7 +273,7 @@ main(int argc, char *argv[]) {
 		default:
 			fprintf(stderr, "%s: unhandled option -%c\n", program,
 				isc_commandline_option);
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -291,7 +293,7 @@ main(int argc, char *argv[]) {
 	argv += isc_commandline_index;
 
 	if (argc < 1) {
-		usage();
+		usage(EXIT_FAILURE);
 	}
 
 	file = argv[0];
@@ -342,5 +344,7 @@ main(int argc, char *argv[]) {
 	}
 	isc_mem_destroy(&mctx);
 
-	return (result == ISC_R_SUCCESS ? 0 : 1);
+	rcu_barrier();
+
+	return result == ISC_R_SUCCESS ? 0 : 1;
 }

@@ -79,14 +79,11 @@
 
 #include <irs/resconf.h>
 
-#define CHECK(r)                             \
-	do {                                 \
-		result = (r);                \
-		if (result != ISC_R_SUCCESS) \
-			goto cleanup;        \
-	} while (0)
-
 #define MAXNAME (DNS_NAME_MAXTEXT + 1)
+
+#define MAX_QUERIES  50
+#define MAX_TOTAL    200
+#define MAX_RESTARTS 11
 
 /* Variables used internally by delv. */
 char *progname = NULL;
@@ -95,7 +92,8 @@ static isc_log_t *lctx = NULL;
 static dns_view_t *view = NULL;
 static ns_server_t *sctx = NULL;
 static ns_interface_t *ifp = NULL;
-static dns_dispatch_t *dispatch = NULL;
+static dns_dispatch_t *dispatch4 = NULL;
+static dns_dispatch_t *dispatch6 = NULL;
 static dns_db_t *roothints = NULL;
 static isc_stats_t *resstats = NULL;
 static dns_stats_t *resquerystats = NULL;
@@ -130,6 +128,10 @@ static bool showcomments = true, showdnssec = true, showtrust = true,
 	    multiline = false, short_form = false, print_unknown_format = false,
 	    yaml = false, fulltrace = false;
 
+static uint32_t maxqueries = MAX_QUERIES;
+static uint32_t maxtotal = MAX_TOTAL;
+static uint32_t restarts = MAX_RESTARTS;
+
 static bool resolve_trace = false, validator_trace = false,
 	    message_trace = false, send_trace = false;
 
@@ -162,8 +164,11 @@ get_reverse(char *reverse, size_t len, char *value, bool strict);
 static isc_result_t
 parse_uint(uint32_t *uip, const char *value, uint32_t max, const char *desc);
 
+noreturn static void
+usage(int ret);
+
 static void
-usage(void) {
+usage(int ret) {
 	fprintf(stderr,
 		"Usage:  delv [@server] {q-opt} {d-opt} [domain] [q-type] "
 		"[q-class]\n"
@@ -247,7 +252,7 @@ usage(void) {
 		"process)\n"
 		"                 +[no]yaml           (Present the results as "
 		"YAML)\n");
-	exit(1);
+	exit(ret);
 }
 
 noreturn static void
@@ -263,8 +268,7 @@ fatal(const char *format, ...) {
 	vfprintf(stderr, format, args);
 	va_end(args);
 	fprintf(stderr, "\n");
-	isc__tls_setfatalmode();
-	exit(1);
+	_exit(EXIT_FAILURE);
 }
 
 static void
@@ -399,7 +403,7 @@ print_status(dns_rdataset_t *rdataset) {
 
 	if ((rdataset->attributes & DNS_RDATASETATTR_NEGATIVE) != 0) {
 		strlcat(buf, "negative response", sizeof(buf));
-		strlcat(buf, (yaml ? "_" : ", "), sizeof(buf));
+		strlcat(buf, yaml ? "_" : ", ", sizeof(buf));
 	}
 
 	switch (rdataset->trust) {
@@ -601,7 +605,7 @@ setup_style(void) {
 						48, 80, 8, splitwidth, mctx);
 	}
 
-	return (result);
+	return result;
 }
 
 static isc_result_t
@@ -622,11 +626,11 @@ convert_name(dns_fixedname_t *fn, dns_name_t **name, const char *text) {
 	if (result != ISC_R_SUCCESS) {
 		delv_log(ISC_LOG_ERROR, "failed to convert name %s: %s", text,
 			 isc_result_totext(result));
-		return (result);
+		return result;
 	}
 
 	*name = n;
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static isc_result_t
@@ -659,7 +663,7 @@ key_fromconfig(const cfg_obj_t *key, dns_client_t *client, dns_view_t *toview) {
 	CHECK(convert_name(&fkeyname, &keyname, keynamestr));
 
 	if (!root_validation) {
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 
 	if (anchor_name) {
@@ -667,11 +671,11 @@ key_fromconfig(const cfg_obj_t *key, dns_client_t *client, dns_view_t *toview) {
 	}
 
 	if (!match_root) {
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 
 	if (!root_validation) {
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 
 	delv_log(ISC_LOG_DEBUG(3), "adding trust anchor %s", trust_anchor);
@@ -824,7 +828,7 @@ cleanup:
 		result = ISC_R_FAILURE;
 	}
 
-	return (result);
+	return result;
 }
 
 static isc_result_t
@@ -849,7 +853,7 @@ cleanup:
 	if (result == DST_R_NOCRYPTO) {
 		result = ISC_R_SUCCESS;
 	}
-	return (result);
+	return result;
 }
 
 static isc_result_t
@@ -862,7 +866,7 @@ setup_dnsseckeys(dns_client_t *client, dns_view_t *toview) {
 	cfg_obj_t *bindkeys = NULL;
 
 	if (!root_validation) {
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 
 	if (trust_anchor == NULL) {
@@ -929,7 +933,7 @@ cleanup:
 		delv_log(ISC_LOG_ERROR, "setup_dnsseckeys: %s",
 			 isc_result_totext(result));
 	}
-	return (result);
+	return result;
 }
 
 static isc_result_t
@@ -976,7 +980,7 @@ addserver(dns_client_t *client) {
 		if (gaierror != 0) {
 			delv_log(ISC_LOG_ERROR, "getaddrinfo failed: %s",
 				 gai_strerror(gaierror));
-			return (ISC_R_FAILURE);
+			return ISC_R_FAILURE;
 		}
 
 		result = ISC_R_SUCCESS;
@@ -1012,7 +1016,7 @@ cleanup:
 			 isc_result_totext(result));
 	}
 
-	return (result);
+	return result;
 }
 
 static isc_result_t
@@ -1081,7 +1085,7 @@ cleanup:
 	if (resconf != NULL) {
 		irs_resconf_destroy(&resconf);
 	}
-	return (result);
+	return result;
 }
 
 static isc_result_t
@@ -1094,10 +1098,10 @@ parse_uint(uint32_t *uip, const char *value, uint32_t max, const char *desc) {
 	if (result != ISC_R_SUCCESS) {
 		printf("invalid %s '%s': %s\n", desc, value,
 		       isc_result_totext(result));
-		return (result);
+		return result;
 	}
 	*uip = n;
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static void
@@ -1163,7 +1167,7 @@ plus_option(char *option) {
 			if (state) {
 				fprintf(stderr, "Invalid option: "
 						"+dlv is obsolete\n");
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 			break;
 		case 'n': /* dnssec */
@@ -1192,6 +1196,47 @@ plus_option(char *option) {
 		break;
 	case 'm':
 		switch (cmd[1]) {
+		case 'a':
+			switch (cmd[3]) {
+			case 'q': /* maxqueries */
+				FULLCHECK("maxqueries");
+				if (value == NULL) {
+					goto need_value;
+				}
+				if (!state) {
+					goto invalid_option;
+				}
+				result = parse_uint(&maxqueries, value,
+						    UINT_MAX, "maxqueries");
+				if (result != ISC_R_SUCCESS) {
+					fatal("Couldn't parse maxqueries");
+				}
+				if (maxqueries == 0) {
+					fatal("maxqueries must be nonzero");
+				}
+				break;
+			case 't': /* maxtotalqueries */
+				FULLCHECK("maxtotalqueries");
+				if (value == NULL) {
+					goto need_value;
+				}
+				if (!state) {
+					goto invalid_option;
+				}
+				result = parse_uint(&maxtotal, value, UINT_MAX,
+						    "maxtotalqueries");
+				if (result != ISC_R_SUCCESS) {
+					fatal("Couldn't parse maxtotalqueries");
+				}
+				if (maxtotal == 0) {
+					fatal("maxtotalqueries must be "
+					      "nonzero");
+				}
+				break;
+			default:
+				goto invalid_option;
+			}
+			break;
 		case 't': /* mtrace */
 			FULLCHECK("mtrace");
 			message_trace = state;
@@ -1244,6 +1289,22 @@ plus_option(char *option) {
 		break;
 	case 'r':
 		switch (cmd[1]) {
+		case 'e': /* restarts */
+			FULLCHECK("restarts");
+			if (value == NULL) {
+				goto need_value;
+			}
+			if (!state) {
+				goto invalid_option;
+			}
+			result = parse_uint(&restarts, value, 255, "restarts");
+			if (result != ISC_R_SUCCESS) {
+				fatal("Couldn't parse restarts");
+			}
+			if (restarts == 0) {
+				fatal("restarts must be between 1..255");
+			}
+			break;
 		case 'o': /* root */
 			FULLCHECK("root");
 			if (state && no_sigs) {
@@ -1371,12 +1432,9 @@ plus_option(char *option) {
 		break;
 	default:
 	invalid_option:
-		/*
-		 * We can also add a "need_value:" case here if we ever
-		 * add a plus-option that requires a specified value
-		 */
+	need_value:
 		fprintf(stderr, "Invalid option: +%s\n", option);
-		usage();
+		usage(EXIT_FAILURE);
 	}
 	return;
 }
@@ -1429,8 +1487,8 @@ dash_option(char *option, char *next, bool *open_type_class) {
 			}
 			break;
 		case 'h':
-			usage();
-			exit(0);
+			usage(EXIT_SUCCESS);
+
 		case 'i':
 			no_sigs = true;
 			root_validation = false;
@@ -1440,14 +1498,14 @@ dash_option(char *option, char *next, bool *open_type_class) {
 			break;
 		case 'v':
 			printf("delv %s\n", PACKAGE_VERSION);
-			exit(0);
+			exit(EXIT_SUCCESS);
 		default:
 			UNREACHABLE();
 		}
 		if (strlen(option) > 1U) {
 			option = &option[1];
 		} else {
-			return (false);
+			return false;
 		}
 	}
 	opt = option[0];
@@ -1464,7 +1522,7 @@ dash_option(char *option, char *next, bool *open_type_class) {
 	switch (opt) {
 	case 'a':
 		anchorfile = isc_mem_strdup(mctx, value);
-		return (value_from_next);
+		return value_from_next;
 	case 'b':
 		hash = strchr(value, '#');
 		if (hash != NULL) {
@@ -1501,7 +1559,7 @@ dash_option(char *option, char *next, bool *open_type_class) {
 		if (hash != NULL) {
 			*hash = '#';
 		}
-		return (value_from_next);
+		return value_from_next;
 	case 'c':
 		if (classset) {
 			warn("extra query class");
@@ -1519,28 +1577,28 @@ dash_option(char *option, char *next, bool *open_type_class) {
 		} else {
 			warn("ignoring invalid class");
 		}
-		return (value_from_next);
+		return value_from_next;
 	case 'd':
 		result = parse_uint(&num, value, 99, "debug level");
 		if (result != ISC_R_SUCCESS) {
 			fatal("Couldn't parse debug level");
 		}
 		loglevel = num;
-		return (value_from_next);
+		return value_from_next;
 	case 'p':
 		port = value;
 		result = parse_uint(&destport, port, 0xffff, "port");
 		if (result != ISC_R_SUCCESS) {
 			fatal("Couldn't parse port number");
 		}
-		return (value_from_next);
+		return value_from_next;
 	case 'q':
 		if (curqname != NULL) {
 			warn("extra query name");
 			isc_mem_free(mctx, curqname);
 		}
 		curqname = isc_mem_strdup(mctx, value);
-		return (value_from_next);
+		return value_from_next;
 	case 't':
 		*open_type_class = false;
 		tr.base = value;
@@ -1561,7 +1619,7 @@ dash_option(char *option, char *next, bool *open_type_class) {
 		} else {
 			warn("ignoring invalid type");
 		}
-		return (value_from_next);
+		return value_from_next;
 	case 'x':
 		result = get_reverse(textname, sizeof(textname), value, false);
 		if (result == ISC_R_SUCCESS) {
@@ -1577,16 +1635,16 @@ dash_option(char *option, char *next, bool *open_type_class) {
 			typeset = true;
 		} else {
 			fprintf(stderr, "Invalid IP address %s\n", value);
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
-		return (value_from_next);
+		return value_from_next;
 	invalid_option:
 	default:
 		fprintf(stderr, "Invalid option: -%s\n", option);
-		usage();
+		usage(EXIT_FAILURE);
 	}
 	UNREACHABLE();
-	return (false);
+	return false;
 }
 
 /*
@@ -1753,11 +1811,11 @@ parse_args(int argc, char **argv) {
 static isc_result_t
 append_str(const char *text, int len, char **p, char *end) {
 	if (len > end - *p) {
-		return (ISC_R_NOSPACE);
+		return ISC_R_NOSPACE;
 	}
 	memmove(*p, text, len);
 	*p += len;
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static isc_result_t
@@ -1768,17 +1826,17 @@ reverse_octets(const char *in, char **p, char *end) {
 		isc_result_t result;
 		result = reverse_octets(dot + 1, p, end);
 		if (result != ISC_R_SUCCESS) {
-			return (result);
+			return result;
 		}
 		result = append_str(".", 1, p, end);
 		if (result != ISC_R_SUCCESS) {
-			return (result);
+			return result;
 		}
 		len = (int)(dot - in);
 	} else {
 		len = strlen(in);
 	}
-	return (append_str(in, len, p, end));
+	return append_str(in, len, p, end);
 }
 
 static isc_result_t
@@ -1797,10 +1855,10 @@ get_reverse(char *reverse, size_t len, char *value, bool strict) {
 		name = dns_fixedname_initname(&fname);
 		result = dns_byaddr_createptrname(&addr, name);
 		if (result != ISC_R_SUCCESS) {
-			return (result);
+			return result;
 		}
 		dns_name_format(name, reverse, (unsigned int)len);
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	} else {
 		/*
 		 * Not a valid IPv6 address.  Assume IPv4.
@@ -1813,17 +1871,17 @@ get_reverse(char *reverse, size_t len, char *value, bool strict) {
 		char *p = reverse;
 		char *end = reverse + len;
 		if (strict && inet_pton(AF_INET, value, &addr.type.in) != 1) {
-			return (DNS_R_BADDOTTEDQUAD);
+			return DNS_R_BADDOTTEDQUAD;
 		}
 		result = reverse_octets(value, &p, end);
 		if (result != ISC_R_SUCCESS) {
-			return (result);
+			return result;
 		}
 		result = append_str(".in-addr.arpa.", 15, &p, end);
 		if (result != ISC_R_SUCCESS) {
-			return (result);
+			return result;
 		}
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 }
 
@@ -1899,6 +1957,8 @@ run_resolve(void *arg) {
 	/* Create client */
 	CHECK(dns_client_create(mctx, loopmgr, netmgr, 0, tlsctx_client_cache,
 				&client, srcaddr4, srcaddr6));
+	dns_client_setmaxrestarts(client, restarts);
+	dns_client_setmaxqueries(client, maxtotal);
 
 	/* Set the nameserver */
 	if (server != NULL) {
@@ -1935,8 +1995,11 @@ shutdown_server(void) {
 		ns_interfacemgr_shutdown(interfacemgr);
 		ns_interfacemgr_detach(&interfacemgr);
 	}
-	if (dispatch != NULL) {
-		dns_dispatch_detach(&dispatch);
+	if (dispatch4 != NULL) {
+		dns_dispatch_detach(&dispatch4);
+	}
+	if (dispatch6 != NULL) {
+		dns_dispatch_detach(&dispatch6);
 	}
 	if (dispatchmgr != NULL) {
 		dns_dispatchmgr_detach(&dispatchmgr);
@@ -2059,7 +2122,7 @@ accept_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	UNUSED(handle);
 	UNUSED(arg);
 
-	return (result);
+	return result;
 }
 
 static void
@@ -2104,9 +2167,8 @@ sendquery(void *arg) {
 
 	dns_view_attach(view, &(dns_view_t *){ NULL });
 	CHECK(dns_request_create(requestmgr, message, NULL, &peer, NULL, NULL,
-				 DNS_REQUESTOPT_TCP, NULL, 1, 0, 0,
-				 isc_loop_current(loopmgr), recvresponse,
-				 message, &request));
+				 DNS_REQUESTOPT_TCP, NULL, 1, 0, 0, isc_loop(),
+				 recvresponse, message, &request));
 	return;
 
 cleanup:
@@ -2119,23 +2181,30 @@ cleanup:
 
 static isc_result_t
 matchview(isc_netaddr_t *srcaddr, isc_netaddr_t *destaddr,
-	  dns_message_t *message, dns_aclenv_t *env, isc_result_t *sigresultp,
+	  dns_message_t *message, dns_aclenv_t *env, ns_server_t *lsctx,
+	  isc_loop_t *loop, isc_job_cb cb, void *cbarg,
+	  isc_result_t *sigresultp, isc_result_t *viewpatchresultp,
 	  dns_view_t **viewp) {
 	UNUSED(srcaddr);
 	UNUSED(destaddr);
 	UNUSED(message);
 	UNUSED(env);
+	UNUSED(lsctx);
+	UNUSED(loop);
+	UNUSED(cb);
+	UNUSED(cbarg);
 	UNUSED(sigresultp);
 
 	*viewp = view;
-	return (ISC_R_SUCCESS);
+	*viewpatchresultp = ISC_R_SUCCESS;
+	return ISC_R_SUCCESS;
 }
 
 static void
 run_server(void *arg) {
 	isc_result_t result;
 	dns_cache_t *cache = NULL;
-	isc_sockaddr_t addr, any;
+	isc_sockaddr_t addr, any, any6;
 	struct in_addr in;
 
 	UNUSED(arg);
@@ -2146,17 +2215,30 @@ run_server(void *arg) {
 	ns_server_create(mctx, matchview, &sctx);
 
 	CHECK(dns_dispatchmgr_create(mctx, loopmgr, netmgr, &dispatchmgr));
-	isc_sockaddr_any(&any);
-	CHECK(dns_dispatch_createudp(dispatchmgr, &any, &dispatch));
-	CHECK(ns_interfacemgr_create(mctx, sctx, loopmgr, netmgr, dispatchmgr,
-				     NULL, false, &interfacemgr));
 
-	CHECK(dns_view_create(mctx, dispatchmgr, dns_rdataclass_in, "_default",
-			      &view));
-	CHECK(dns_cache_create(loopmgr, dns_rdataclass_in, "", &cache));
+	if (use_ipv4) {
+		isc_sockaddr_any(&any);
+		isc_sockaddr_t *a = (srcaddr4 == NULL) ? &any : srcaddr4;
+		CHECK(dns_dispatch_createudp(dispatchmgr, a, &dispatch4));
+	}
+
+	if (use_ipv6) {
+		isc_sockaddr_any6(&any6);
+		isc_sockaddr_t *a = (srcaddr6 == NULL) ? &any6 : srcaddr6;
+		CHECK(dns_dispatch_createudp(dispatchmgr, a, &dispatch6));
+	}
+
+	CHECK(ns_interfacemgr_create(mctx, sctx, loopmgr, netmgr, dispatchmgr,
+				     NULL, &interfacemgr));
+
+	CHECK(dns_view_create(mctx, loopmgr, dispatchmgr, dns_rdataclass_in,
+			      "_default", &view));
+	CHECK(dns_cache_create(loopmgr, dns_rdataclass_in, "", mctx, &cache));
 	dns_view_setcache(view, cache, false);
 	dns_cache_detach(&cache);
 	dns_view_setdstport(view, destport);
+	dns_view_setmaxrestarts(view, restarts);
+	dns_view_setmaxqueries(view, maxtotal);
 
 	CHECK(dns_rootns_create(mctx, dns_rdataclass_in, hintfile, &roothints));
 	dns_view_sethints(view, roothints);
@@ -2168,8 +2250,9 @@ run_server(void *arg) {
 	dns_view_initsecroots(view);
 	CHECK(setup_dnsseckeys(NULL, view));
 
-	CHECK(dns_view_createresolver(view, loopmgr, netmgr, 0,
-				      tlsctx_client_cache, dispatch, NULL));
+	CHECK(dns_view_createresolver(view, netmgr, 0, tlsctx_client_cache,
+				      dispatch4, dispatch6));
+	dns_resolver_setmaxqueries(view->resolver, maxqueries);
 
 	isc_stats_create(mctx, &resstats, dns_resstatscounter_max);
 	dns_resolver_setstats(view->resolver, resstats);
@@ -2188,7 +2271,7 @@ run_server(void *arg) {
 				     NULL, NULL, ISC_NM_PROXY_NONE,
 				     &ifp->tcplistensocket));
 	ifp->flags |= NS_INTERFACEFLAG_LISTENING;
-	isc_async_current(loopmgr, sendquery, ifp->tcplistensocket);
+	isc_async_current(sendquery, ifp->tcplistensocket);
 
 	return;
 
@@ -2266,5 +2349,5 @@ cleanup:
 
 	isc_managers_destroy(&mctx, &loopmgr, &netmgr);
 
-	return (0);
+	return 0;
 }

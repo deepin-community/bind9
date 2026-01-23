@@ -128,10 +128,10 @@ Currently supported commands are:
 
 .. option:: addzone zone [class [view]] configuration
 
-   This command adds a zone while the server is running. This command requires the
-   ``allow-new-zones`` option to be set to ``yes``. The configuration
-   string specified on the command line is the zone configuration text
-   that would ordinarily be placed in :iscman:`named.conf`.
+   This command adds a zone while the server is running. This command
+   requires the ``allow-new-zones`` option to be set to ``yes``. The
+   configuration string specified on the command line is the zone
+   configuration text that would ordinarily be placed in :iscman:`named.conf`.
 
    The configuration is saved in a file called ``viewname.nzf`` (or, if
    :iscman:`named` is compiled with liblmdb, an LMDB database file called
@@ -171,13 +171,20 @@ Currently supported commands are:
 
    See also :option:`rndc addzone` and :option:`rndc modzone`.
 
-.. option:: dnssec (-status | -rollover -key id [-alg algorithm] [-when time] | -checkds [-key id [-alg algorithm]] [-when time]  published | withdrawn)) zone [class [view]]
+.. option:: dnssec (-status | -step | -rollover -key id [-alg algorithm] [-when time] | -checkds [-key id [-alg algorithm]] [-when time]  published | withdrawn)) zone [class [view]]
 
    This command allows you to interact with the "dnssec-policy" of a given
    zone.
 
    ``rndc dnssec -status`` show the DNSSEC signing state for the specified
    zone.
+
+   ``rndc dnssec -step`` sends a signal to an instance of :iscman:`named` for a
+   zone configured with ``dnssec-policy`` in manual mode, telling it to
+   continue with the operations that had previously been blocked but logged.
+   This gives the human operator a chance to review the log messages,
+   understand what will happen next and then, using ``rndc dnssec -step``, to
+   inform :iscman:`named` to proceed to the next stage.
 
    ``rndc dnssec -rollover`` allows you to schedule key rollover for a
    specific key (overriding the original key lifetime).
@@ -257,6 +264,11 @@ Currently supported commands are:
 
    See also :option:`rndc stop`.
 
+.. option:: skr -import file zone [class [view]]
+
+   This command allows you to import a SKR file for the specified zone, to
+   support offline KSK signing.
+
 .. option:: loadkeys [zone [class [view]]]
 
    This command fetches all DNSSEC keys for the given zone from the key directory. If
@@ -265,9 +277,7 @@ Currently supported commands are:
    immediately re-signed by the new keys, but is allowed to
    incrementally re-sign over time.
 
-   This command requires that the zone be configured with a ``dnssec-policy``, and
-   also requires the zone to be configured to allow dynamic DNS. (See "Dynamic
-   Update Policies" in the Administrator Reference Manual for more details.)
+   This command requires that the zone be configured with a ``dnssec-policy``.
 
 .. option:: managed-keys (status | refresh | sync | destroy) [class [view]]
 
@@ -308,12 +318,25 @@ Currently supported commands are:
       keys in the event of a trust anchor rollover, or as a brute-force
       repair for key maintenance problems.
 
+.. option:: memprof [(on | off | dump)]
+
+   This command controls memory profiling. To have any effect, :iscman:`named` must be
+   built with jemalloc, the library have profiling support enabled and run with the
+   ``prof:true`` allocator configuration. (either via ``MALLOC_CONF`` or ``/etc/malloc.conf``)
+
+   The ``prof_active:false`` option is recommended to ensure the profiling overhead does
+   not affect :iscman:`named` when not needed.
+
+   The ``on`` and ``off`` options will start and stop the jemalloc memory profiling respectively.
+   When run with the `dump` option, :iscman:`named` will dump the profile to the working
+   directory. The name will be chosen automatically by jemalloc.
+
 .. option:: modzone zone [class [view]] configuration
 
-   This command modifies the configuration of a zone while the server is running. This
-   command requires the ``allow-new-zones`` option to be set to ``yes``.
-   As with ``addzone``, the configuration string specified on the
-   command line is the zone configuration text that would ordinarily be
+   This command modifies the configuration of a zone while the server is
+   running. This command requires the ``allow-new-zones`` option to be set
+   to ``yes``.  As with ``addzone``, the configuration string specified on
+   the command line is the zone configuration text that would ordinarily be
    placed in :iscman:`named.conf`.
 
    If the zone was originally added via :option:`rndc addzone`, the
@@ -444,14 +467,34 @@ Currently supported commands are:
 
 .. program:: rndc
 
-.. option:: retransfer zone [class [view]]
+.. option:: reset-stats <counter-name ...>
+
+   This command resets the requested statistics counters.
+
+   At least one counter name must be provided. Currently the following counters
+   are supported: ``recursive-high-water``, ``tcp-high-water``.
+
+.. option:: responselog [on | off]
+
+   This command enables or disables response logging. For backward compatibility,
+   this command can also be used without an argument to toggle response logging
+   on and off.
+
+   Unlike query logging, response logging cannot be enabled by explicitly directing
+   the ``responses`` ``category`` to a ``channel`` in the ``logging`` section
+   of :iscman:`named.conf`, but it can still be enabled by specifying
+   ``responselog yes;`` in the ``options`` section of :iscman:`named.conf`.
+
+.. option:: retransfer [-force] zone [class [view]]
 
    This command retransfers the given secondary zone from the primary server.
 
    If the zone is configured to use ``inline-signing``, the signed
    version of the zone is discarded; after the retransfer of the
    unsigned version is complete, the signed version is regenerated
-   with new signatures.
+   with new signatures. With the optional ``-force`` argument provided
+   if there is an ongoing zone transfer it will be aborted before a new zone
+   transfer is scheduled.
 
 .. option:: scan
 
@@ -492,9 +535,11 @@ Currently supported commands are:
 
 .. option:: showzone zone [class [view]]
 
-   This command prints the configuration of a running zone.
+   If the server is configured with ``allow-new-zones`` set to ``yes``,
+   then this command prints the configuration of a running zone.
 
-   See also :option:`rndc zonestatus`.
+   See also :option:`rndc addzone`, :option:`rndc modzone`.
+   and :option:`rndc delzone`.
 
 .. option:: sign zone [class [view]]
 
@@ -502,11 +547,11 @@ Currently supported commands are:
    the ``key-directory`` option in the BIND 9 Administrator Reference
    Manual). If they are within their publication period, they are merged into
    the zone's DNSKEY RRset. If the DNSKEY RRset is changed, then the
-   zone is automatically re-signed with the new key set.
+   zone is automatically re-signed with the new key set. This will replace signatures
+   of inactive keys with signatures from active keys, and update signatures that
+   expire within the refresh interval.
 
-   This command requires that the zone be configured with a ``dnssec-policy``, and
-   also requires the zone to be configured to allow dynamic DNS. (See "Dynamic
-   Update Policies" in the Administrator Reference Manual for more details.)
+   This command requires that the zone be configured with a ``dnssec-policy``.
 
    See also :option:`rndc loadkeys`.
 

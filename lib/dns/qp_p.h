@@ -19,6 +19,10 @@
 
 #pragma once
 
+#include <isc/refcount.h>
+
+#include <dns/qp.h>
+
 /***********************************************************************
  *
  *  interior node basics
@@ -139,22 +143,29 @@ enum {
  * size to make the allocator work harder.
  */
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-#define QP_CHUNK_LOG 7
+#define QP_CHUNK_LOG_MIN 7
+#define QP_CHUNK_LOG_MAX 7
 #else
-#define QP_CHUNK_LOG 10
+#define QP_CHUNK_LOG_MIN 3
+#define QP_CHUNK_LOG_MAX 12
 #endif
 
-STATIC_ASSERT(6 <= QP_CHUNK_LOG && QP_CHUNK_LOG <= 20,
-	      "qp-trie chunk size is unreasonable");
+STATIC_ASSERT(2 <= QP_CHUNK_LOG_MIN && QP_CHUNK_LOG_MIN <= QP_CHUNK_LOG_MAX,
+	      "qp-trie min chunk size is unreasonable");
+STATIC_ASSERT(6 <= QP_CHUNK_LOG_MAX && QP_CHUNK_LOG_MAX <= 20,
+	      "qp-trie max chunk size is unreasonable");
 
-#define QP_CHUNK_SIZE  (1U << QP_CHUNK_LOG)
+#define QP_CHUNK_SIZE  (1U << QP_CHUNK_LOG_MAX)
 #define QP_CHUNK_BYTES (QP_CHUNK_SIZE * sizeof(dns_qpnode_t))
+
+STATIC_ASSERT(QP_SAFETY_MARGIN >= QP_CHUNK_BYTES,
+	      "qp-trie safety margin too small");
 
 /*
  * We need a bitfield this big to count how much of a chunk is in use:
- * it needs to count from 0 up to and including `1 << QP_CHUNK_LOG`.
+ * it needs to count from 0 up to and including `1 << QP_CHUNK_LOG_MAX`.
  */
-#define QP_USAGE_BITS (QP_CHUNK_LOG + 1)
+#define QP_USAGE_BITS (QP_CHUNK_LOG_MAX + 1)
 
 /*
  * A chunk needs to be compacted if it is less full than this threshold.
@@ -196,17 +207,17 @@ STATIC_ASSERT(6 <= QP_CHUNK_LOG && QP_CHUNK_LOG <= 20,
 
 static inline dns_qpref_t
 make_ref(dns_qpchunk_t chunk, dns_qpcell_t cell) {
-	return (QP_CHUNK_SIZE * chunk + cell);
+	return QP_CHUNK_SIZE * chunk + cell;
 }
 
 static inline dns_qpchunk_t
 ref_chunk(dns_qpref_t ref) {
-	return (ref / QP_CHUNK_SIZE);
+	return ref / QP_CHUNK_SIZE;
 }
 
 static inline dns_qpcell_t
 ref_cell(dns_qpref_t ref) {
-	return (ref % QP_CHUNK_SIZE);
+	return ref % QP_CHUNK_SIZE;
 }
 
 /*
@@ -266,6 +277,8 @@ ref_cell(dns_qpref_t ref) {
 typedef struct qp_usage {
 	/*% the allocation point, increases monotonically */
 	dns_qpcell_t used : QP_USAGE_BITS;
+	/*% the actual size of the allocation */
+	dns_qpcell_t capacity : QP_USAGE_BITS;
 	/*% count of nodes no longer needed, also monotonic */
 	dns_qpcell_t free : QP_USAGE_BITS;
 	/*% qp->base->ptr[chunk] != NULL */
@@ -320,6 +333,7 @@ typedef struct qp_rcuctx {
 	struct rcu_head rcu_head;
 	isc_mem_t *mctx;
 	dns_qpmulti_t *multi;
+	ISC_LINK(struct qp_rcuctx) link;
 	dns_qpchunk_t count;
 	dns_qpchunk_t chunk[];
 } qp_rcuctx_t;
@@ -330,8 +344,8 @@ typedef struct qp_rcuctx {
 static inline bool
 qpbase_unref(dns_qpreadable_t qpr) {
 	dns_qpreader_t *qp = dns_qpreader(qpr);
-	return (qp->base != NULL &&
-		isc_refcount_decrement(&qp->base->refcount) == 1);
+	return qp->base != NULL &&
+	       isc_refcount_decrement(&qp->base->refcount) == 1;
 }
 
 /*
@@ -341,7 +355,7 @@ qpbase_unref(dns_qpreadable_t qpr) {
 static inline dns_qpnode_t *
 ref_ptr(dns_qpreadable_t qpr, dns_qpref_t ref) {
 	dns_qpreader_t *qp = dns_qpreader(qpr);
-	return (qp->base->ptr[ref_chunk(ref)] + ref_cell(ref));
+	return qp->base->ptr[ref_chunk(ref)] + ref_cell(ref);
 }
 
 /***********************************************************************
@@ -477,6 +491,8 @@ struct dns_qp {
 	dns_qpcell_t used_count, free_count;
 	/*% free cells that cannot be recovered right now */
 	dns_qpcell_t hold_count;
+	/*% capacity of last allocated chunk, for exponential chunk growth */
+	dns_qpcell_t chunk_capacity;
 	/*% what kind of transaction was most recently started [MT] */
 	enum { QP_NONE, QP_WRITE, QP_UPDATE } transaction_mode : 2;
 	/*% compact the entire trie [MT] */
@@ -521,6 +537,8 @@ struct dns_qpmulti {
 	dns_qp_t *rollback;
 	/*% all snapshots of this trie */
 	ISC_LIST(dns_qpsnap_t) snapshots;
+	/*% refcount for memory reclamation */
+	isc_refcount_t references;
 };
 
 /***********************************************************************
@@ -544,7 +562,7 @@ static inline uint64_t
 node64(dns_qpnode_t *n) {
 	uint64_t lo = n->biglo;
 	uint64_t hi = n->bighi;
-	return (lo | (hi << 32));
+	return lo | (hi << 32);
 }
 
 /*
@@ -552,7 +570,7 @@ node64(dns_qpnode_t *n) {
  */
 static inline uint32_t
 node32(dns_qpnode_t *n) {
-	return (n->small);
+	return n->small;
 }
 
 /*
@@ -560,11 +578,11 @@ node32(dns_qpnode_t *n) {
  */
 static inline dns_qpnode_t
 make_node(uint64_t big, uint32_t small) {
-	return ((dns_qpnode_t){
+	return (dns_qpnode_t){
 		.biglo = (uint32_t)(big),
 		.bighi = (uint32_t)(big >> 32),
 		.small = small,
-	});
+	};
 }
 
 /*
@@ -573,7 +591,7 @@ make_node(uint64_t big, uint32_t small) {
  */
 static inline void *
 node_pointer(dns_qpnode_t *n) {
-	return ((void *)(uintptr_t)(node64(n) & ~TAG_MASK));
+	return (void *)(uintptr_t)(node64(n) & ~TAG_MASK);
 }
 
 /*
@@ -581,7 +599,7 @@ node_pointer(dns_qpnode_t *n) {
  */
 static inline uint32_t
 node_tag(dns_qpnode_t *n) {
-	return (n->biglo & TAG_MASK);
+	return n->biglo & TAG_MASK;
 }
 
 /*
@@ -589,7 +607,7 @@ node_tag(dns_qpnode_t *n) {
  */
 static inline bool
 is_branch(dns_qpnode_t *n) {
-	return (n->biglo & BRANCH_TAG);
+	return n->biglo & BRANCH_TAG;
 }
 
 /* leaf nodes *********************************************************/
@@ -599,7 +617,7 @@ is_branch(dns_qpnode_t *n) {
  */
 static inline void *
 leaf_pval(dns_qpnode_t *n) {
-	return (node_pointer(n));
+	return node_pointer(n);
 }
 
 /*
@@ -607,7 +625,7 @@ leaf_pval(dns_qpnode_t *n) {
  */
 static inline uint32_t
 leaf_ival(dns_qpnode_t *n) {
-	return (node32(n));
+	return node32(n);
 }
 
 /*
@@ -617,7 +635,7 @@ static inline dns_qpnode_t
 make_leaf(const void *pval, uint32_t ival) {
 	dns_qpnode_t leaf = make_node((uintptr_t)pval, ival);
 	REQUIRE(node_tag(&leaf) == LEAF_TAG);
-	return (leaf);
+	return leaf;
 }
 
 /* branch nodes *******************************************************/
@@ -633,7 +651,7 @@ make_leaf(const void *pval, uint32_t ival) {
  */
 static inline uint64_t
 branch_index(dns_qpnode_t *n) {
-	return (node64(n));
+	return node64(n);
 }
 
 /*
@@ -641,7 +659,7 @@ branch_index(dns_qpnode_t *n) {
  */
 static inline dns_qpref_t
 branch_twigs_ref(dns_qpnode_t *n) {
-	return (node32(n));
+	return node32(n);
 }
 
 /*
@@ -651,9 +669,9 @@ branch_twigs_ref(dns_qpnode_t *n) {
 static inline dns_qpshift_t
 qpkey_bit(const dns_qpkey_t key, size_t len, size_t offset) {
 	if (offset < len) {
-		return (key[offset]);
+		return key[offset];
 	} else {
-		return (SHIFT_NOBYTE);
+		return SHIFT_NOBYTE;
 	}
 }
 
@@ -662,7 +680,7 @@ qpkey_bit(const dns_qpkey_t key, size_t len, size_t offset) {
  */
 static inline size_t
 branch_key_offset(dns_qpnode_t *n) {
-	return ((size_t)(branch_index(n) >> SHIFT_OFFSET));
+	return (size_t)(branch_index(n) >> SHIFT_OFFSET);
 }
 
 /*
@@ -670,7 +688,7 @@ branch_key_offset(dns_qpnode_t *n) {
  */
 static inline dns_qpshift_t
 branch_keybit(dns_qpnode_t *n, const dns_qpkey_t key, size_t len) {
-	return (qpkey_bit(key, len, branch_key_offset(n)));
+	return qpkey_bit(key, len, branch_key_offset(n));
 }
 
 /*
@@ -679,7 +697,7 @@ branch_keybit(dns_qpnode_t *n, const dns_qpkey_t key, size_t len) {
  */
 static inline dns_qpnode_t *
 branch_twigs(dns_qpreadable_t qpr, dns_qpnode_t *n) {
-	return (ref_ptr(qpr, branch_twigs_ref(n)));
+	return ref_ptr(qpr, branch_twigs_ref(n));
 }
 
 /*
@@ -699,9 +717,9 @@ static inline dns_qpnode_t *
 get_root(dns_qpreadable_t qpr) {
 	dns_qpreader_t *qp = dns_qpreader(qpr);
 	if (qp->root_ref == INVALID_REF) {
-		return (NULL);
+		return NULL;
 	} else {
-		return (ref_ptr(qp, qp->root_ref));
+		return ref_ptr(qp, qp->root_ref);
 	}
 }
 
@@ -734,7 +752,7 @@ static inline dns_qpweight_t
 branch_count_bitmap_before(dns_qpnode_t *n, dns_qpshift_t bit) {
 	uint64_t mask = (1ULL << bit) - 1 - TAG_MASK;
 	uint64_t bitmap = branch_index(n) & mask;
-	return ((dns_qpweight_t)__builtin_popcountll(bitmap));
+	return (dns_qpweight_t)__builtin_popcountll(bitmap);
 }
 
 /*
@@ -745,7 +763,7 @@ branch_count_bitmap_before(dns_qpnode_t *n, dns_qpshift_t bit) {
  */
 static inline dns_qpweight_t
 branch_twigs_size(dns_qpnode_t *n) {
-	return (branch_count_bitmap_before(n, SHIFT_OFFSET));
+	return branch_count_bitmap_before(n, SHIFT_OFFSET);
 }
 
 /*
@@ -753,7 +771,7 @@ branch_twigs_size(dns_qpnode_t *n) {
  */
 static inline dns_qpweight_t
 branch_twig_pos(dns_qpnode_t *n, dns_qpshift_t bit) {
-	return (branch_count_bitmap_before(n, bit));
+	return branch_count_bitmap_before(n, bit);
 }
 
 /*
@@ -761,7 +779,7 @@ branch_twig_pos(dns_qpnode_t *n, dns_qpshift_t bit) {
  */
 static inline dns_qpnode_t *
 branch_twig_ptr(dns_qpreadable_t qpr, dns_qpnode_t *n, dns_qpshift_t bit) {
-	return (ref_ptr(qpr, branch_twigs_ref(n) + branch_twig_pos(n, bit)));
+	return ref_ptr(qpr, branch_twigs_ref(n) + branch_twig_pos(n, bit));
 }
 
 /*
@@ -769,7 +787,7 @@ branch_twig_ptr(dns_qpreadable_t qpr, dns_qpnode_t *n, dns_qpshift_t bit) {
  */
 static inline bool
 branch_has_twig(dns_qpnode_t *n, dns_qpshift_t bit) {
-	return (branch_index(n) & (1ULL << bit));
+	return branch_index(n) & (1ULL << bit);
 }
 
 /* twig logistics *****************************************************/
@@ -833,10 +851,10 @@ make_reader(dns_qpnode_t *reader, dns_qpmulti_t *multi) {
 
 static inline bool
 reader_valid(dns_qpnode_t *reader) {
-	return (reader != NULL && //
-		node_tag(&reader[0]) == READER_TAG &&
-		node_tag(&reader[1]) == READER_TAG &&
-		node32(&reader[0]) == QPREADER_MAGIC);
+	return reader != NULL && //
+	       node_tag(&reader[0]) == READER_TAG &&
+	       node_tag(&reader[1]) == READER_TAG &&
+	       node32(&reader[0]) == QPREADER_MAGIC;
 }
 
 /*
@@ -857,7 +875,7 @@ unpack_reader(dns_qpreader_t *qp, dns_qpnode_t *reader) {
 		.root_ref = node32(&reader[1]),
 		.base = base,
 	};
-	return (multi);
+	return multi;
 }
 
 /***********************************************************************
@@ -883,14 +901,14 @@ leaf_qpkey(dns_qpreadable_t qpr, dns_qpnode_t *n, dns_qpkey_t key) {
 	size_t len = qp->methods->makekey(key, qp->uctx, leaf_pval(n),
 					  leaf_ival(n));
 	INSIST(len < sizeof(dns_qpkey_t));
-	return (len);
+	return len;
 }
 
 static inline char *
 triename(dns_qpreadable_t qpr, char *buf, size_t size) {
 	dns_qpreader_t *qp = dns_qpreader(qpr);
 	qp->methods->triename(qp->uctx, buf, size);
-	return (buf);
+	return buf;
 }
 
 #define TRIENAME(qp) \
@@ -909,7 +927,7 @@ triename(dns_qpreadable_t qpr, char *buf, size_t size) {
  */
 static inline bool
 qp_common_character(uint8_t byte) {
-	return (('-' <= byte && byte <= '9') || ('_' <= byte && byte <= 'z'));
+	return ('-' <= byte && byte <= '9') || ('_' <= byte && byte <= 'z');
 }
 
 /*
