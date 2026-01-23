@@ -121,6 +121,7 @@ proxystream_on_header_data_cb(const isc_result_t result,
 		 * the case of TCP it is disabled by default
 		 */
 		proxystream_read_stop(sock);
+		isc__nmsocket_timer_stop(sock);
 		isc__nmhandle_set_manual_timer(sock->outerhandle, false);
 
 		sock->proxy.header_processed = true;
@@ -218,7 +219,7 @@ proxystream_on_header_data_cb(const isc_result_t result,
 		proxystream_failed_read_cb(sock, result);
 		break;
 	};
-};
+}
 
 static void
 proxystream_handle_incoming_header_data(isc_nmsocket_t *sock,
@@ -236,7 +237,7 @@ proxystream_sock_new(isc__networker_t *worker, const isc_nmsocket_type_t type,
 	INSIST(type == isc_nm_proxystreamsocket ||
 	       type == isc_nm_proxystreamlistener);
 
-	sock = isc_mem_get(worker->mctx, sizeof(*sock));
+	sock = isc_mempool_get(worker->nmsocket_pool);
 	isc__nmsocket_init(sock, worker, type, addr, NULL);
 	sock->result = ISC_R_UNSET;
 	if (type == isc_nm_proxystreamsocket) {
@@ -260,7 +261,7 @@ proxystream_sock_new(isc__networker_t *worker, const isc_nmsocket_type_t type,
 		}
 	}
 
-	return (sock);
+	return sock;
 }
 
 static isc_result_t
@@ -271,7 +272,7 @@ proxystream_accept_cb(isc_nmhandle_t *handle, isc_result_t result,
 	isc_sockaddr_t iface;
 
 	if (result != ISC_R_SUCCESS) {
-		return (result);
+		return result;
 	}
 
 	INSIST(VALID_NMHANDLE(handle));
@@ -280,9 +281,9 @@ proxystream_accept_cb(isc_nmhandle_t *handle, isc_result_t result,
 	INSIST(listensock->type == isc_nm_proxystreamlistener);
 
 	if (isc__nm_closing(handle->sock->worker)) {
-		return (ISC_R_SHUTTINGDOWN);
+		return ISC_R_SHUTTINGDOWN;
 	} else if (isc__nmsocket_closing(handle->sock)) {
-		return (ISC_R_CANCELED);
+		return ISC_R_CANCELED;
 	}
 
 	iface = isc_nmhandle_localaddr(handle);
@@ -310,7 +311,7 @@ proxystream_accept_cb(isc_nmhandle_t *handle, isc_result_t result,
 
 	proxystream_read_start(nsock);
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 isc_result_t
@@ -327,7 +328,7 @@ isc_nm_listenproxystream(isc_nm_t *mgr, uint32_t workers, isc_sockaddr_t *iface,
 	REQUIRE(sockp != NULL && *sockp == NULL);
 
 	if (isc__nm_closing(worker)) {
-		return (ISC_R_SHUTTINGDOWN);
+		return ISC_R_SHUTTINGDOWN;
 	}
 
 	listener = proxystream_sock_new(worker, isc_nm_proxystreamlistener,
@@ -348,7 +349,7 @@ isc_nm_listenproxystream(isc_nm_t *mgr, uint32_t workers, isc_sockaddr_t *iface,
 	if (result != ISC_R_SUCCESS) {
 		listener->closed = true;
 		isc__nmsocket_detach(&listener);
-		return (result);
+		return result;
 	}
 
 	listener->active = true;
@@ -357,7 +358,7 @@ isc_nm_listenproxystream(isc_nm_t *mgr, uint32_t workers, isc_sockaddr_t *iface,
 
 	*sockp = listener;
 
-	return (result);
+	return result;
 }
 
 static void
@@ -459,6 +460,7 @@ void
 isc_nm_proxystreamconnect(isc_nm_t *mgr, isc_sockaddr_t *local,
 			  isc_sockaddr_t *peer, isc_nm_cb_t cb, void *cbarg,
 			  unsigned int timeout, isc_tlsctx_t *tlsctx,
+			  const char *sni_hostname,
 			  isc_tlsctx_client_session_cache_t *client_sess_cache,
 			  isc_nm_proxyheader_info_t *proxy_info) {
 	isc_result_t result = ISC_R_FAILURE;
@@ -501,8 +503,9 @@ isc_nm_proxystreamconnect(isc_nm_t *mgr, isc_sockaddr_t *local,
 				  nsock, nsock->connect_timeout);
 	} else {
 		isc_nm_tlsconnect(mgr, local, peer, proxystream_connect_cb,
-				  nsock, tlsctx, client_sess_cache,
-				  nsock->connect_timeout, false, NULL);
+				  nsock, tlsctx, sni_hostname,
+				  client_sess_cache, nsock->connect_timeout,
+				  false, NULL);
 	}
 }
 
@@ -655,10 +658,10 @@ isc__nmsocket_proxystream_timer_running(isc_nmsocket_t *sock) {
 	if (sock->outerhandle != NULL) {
 		INSIST(VALID_NMHANDLE(sock->outerhandle));
 		REQUIRE(VALID_NMSOCK(sock->outerhandle->sock));
-		return (isc__nmsocket_timer_running(sock->outerhandle->sock));
+		return isc__nmsocket_timer_running(sock->outerhandle->sock);
 	}
 
-	return (false);
+	return false;
 }
 
 void
@@ -719,7 +722,7 @@ isc__nmhandle_proxystream_set_tcp_nodelay(isc_nmhandle_t *handle,
 		result = isc_nmhandle_set_tcp_nodelay(sock->outerhandle, value);
 	}
 
-	return (result);
+	return result;
 }
 
 static void
@@ -773,6 +776,7 @@ isc__nm_proxystream_close(isc_nmsocket_t *sock) {
 	 * external references, we can close everything.
 	 */
 	proxystream_read_stop(sock);
+	isc__nmsocket_timer_stop(sock);
 	if (sock->outerhandle != NULL) {
 		sock->reading = false;
 		isc_nm_read_stop(sock->outerhandle);
@@ -791,9 +795,9 @@ isc__nm_proxystream_close(isc_nmsocket_t *sock) {
 
 static bool
 proxystream_closing(isc_nmsocket_t *sock) {
-	return (isc__nmsocket_closing(sock) || sock->outerhandle == NULL ||
-		(sock->outerhandle != NULL &&
-		 isc__nmsocket_closing(sock->outerhandle->sock)));
+	return isc__nmsocket_closing(sock) || sock->outerhandle == NULL ||
+	       (sock->outerhandle != NULL &&
+		isc__nmsocket_closing(sock->outerhandle->sock));
 }
 
 static void
@@ -996,7 +1000,7 @@ proxystream_get_send_req(isc_mem_t *mctx, isc_nmsocket_t *sock,
 
 	sock->proxy.nsending++;
 
-	return (send_req);
+	return send_req;
 }
 
 static void
@@ -1126,10 +1130,10 @@ isc__nm_proxystream_has_encryption(const isc_nmhandle_t *handle) {
 	sock = handle->sock;
 	if (sock->outerhandle != NULL) {
 		INSIST(VALID_NMHANDLE(sock->outerhandle));
-		return (isc_nm_has_encryption(sock->outerhandle));
+		return isc_nm_has_encryption(sock->outerhandle);
 	}
 
-	return (false);
+	return false;
 }
 
 const char *
@@ -1143,11 +1147,10 @@ isc__nm_proxystream_verify_tls_peer_result_string(const isc_nmhandle_t *handle) 
 	sock = handle->sock;
 	if (sock->outerhandle != NULL) {
 		INSIST(VALID_NMHANDLE(sock->outerhandle));
-		return (isc_nm_verify_tls_peer_result_string(
-			sock->outerhandle));
+		return isc_nm_verify_tls_peer_result_string(sock->outerhandle);
 	}
 
-	return (NULL);
+	return NULL;
 }
 
 void

@@ -91,6 +91,7 @@ struct dst_key {
 	dns_rdataclass_t key_class; /*%< class of the key record */
 	dns_ttl_t key_ttl;	    /*%< default/initial dnskey ttl */
 	isc_mem_t *mctx;	    /*%< memory context */
+	char *directory;	    /*%< key directory */
 	char *engine;		    /*%< engine name (HSM) */
 	char *label;		    /*%< engine label (HSM) */
 	union {
@@ -103,21 +104,20 @@ struct dst_key {
 		} pkeypair;
 	} keydata; /*%< pointer to key in crypto pkg fmt */
 
-	isc_stdtime_t times[DST_MAX_TIMES + 1]; /*%< timing metadata */
-	bool timeset[DST_MAX_TIMES + 1];	/*%< data set? */
+	isc_stdtime_t times[DST_MAX_TIMES]; /*%< timing metadata */
+	bool timeset[DST_MAX_TIMES];	    /*%< data set? */
 
-	uint32_t nums[DST_MAX_NUMERIC + 1]; /*%< numeric metadata
-					     * */
-	bool numset[DST_MAX_NUMERIC + 1];   /*%< data set? */
+	uint32_t nums[DST_MAX_NUMERIC]; /*%< numeric metadata
+					 * */
+	bool numset[DST_MAX_NUMERIC];	/*%< data set? */
 
-	bool bools[DST_MAX_BOOLEAN + 1];   /*%< boolean metadata
-					    * */
-	bool boolset[DST_MAX_BOOLEAN + 1]; /*%< data set? */
+	bool bools[DST_MAX_BOOLEAN];   /*%< boolean metadata
+					* */
+	bool boolset[DST_MAX_BOOLEAN]; /*%< data set? */
 
-	dst_key_state_t keystates[DST_MAX_KEYSTATES + 1]; /*%< key states
-							   * */
-	bool keystateset[DST_MAX_KEYSTATES + 1];	  /*%< data
-							   * set? */
+	dst_key_state_t keystates[DST_MAX_KEYSTATES]; /*%< key states
+						       * */
+	bool keystateset[DST_MAX_KEYSTATES];	      /*%< data set? */
 
 	bool kasp;     /*%< key has kasp state */
 	bool inactive; /*%< private key not present as it is

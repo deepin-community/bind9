@@ -33,14 +33,6 @@
 #include <ns/log.h>
 #include <ns/query.h>
 
-#define CHECK(op)                              \
-	do {                                   \
-		result = (op);                 \
-		if (result != ISC_R_SUCCESS) { \
-			goto cleanup;          \
-		}                              \
-	} while (0)
-
 struct ns_plugin {
 	isc_mem_t *mctx;
 	uv_lib_t handle;
@@ -75,11 +67,11 @@ ns_plugin_expandpath(const char *src, char *dst, size_t dstsize) {
 	}
 
 	if (result < 0) {
-		return (isc_errno_toresult(errno));
+		return isc_errno_toresult(errno);
 	} else if ((size_t)result >= dstsize) {
-		return (ISC_R_NOSPACE);
+		return ISC_R_NOSPACE;
 	} else {
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 }
 
@@ -103,12 +95,12 @@ load_symbol(uv_lib_t *handle, const char *modpath, const char *symbol_name,
 			      "failed to look up symbol %s in "
 			      "plugin '%s': %s",
 			      symbol_name, modpath, errmsg);
-		return (ISC_R_FAILURE);
+		return ISC_R_FAILURE;
 	}
 
 	*symbolp = symbol;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static void
@@ -169,7 +161,7 @@ load_plugin(isc_mem_t *mctx, const char *modpath, ns_plugin_t **pluginp) {
 
 	*pluginp = plugin;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 
 cleanup:
 	isc_log_write(ns_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_HOOKS,
@@ -179,7 +171,7 @@ cleanup:
 
 	unload_plugin(&plugin);
 
-	return (result);
+	return result;
 }
 
 static void
@@ -224,6 +216,9 @@ ns_plugin_register(const char *modpath, const char *parameters, const void *cfg,
 	isc_log_write(ns_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_HOOKS,
 		      ISC_LOG_INFO, "registering plugin '%s'", modpath);
 
+	CHECK(plugin->check_func(parameters, cfg, cfg_file, cfg_line, mctx,
+				 lctx, actx));
+
 	CHECK(plugin->register_func(parameters, cfg, cfg_file, cfg_line, mctx,
 				    lctx, actx, view->hooktable,
 				    &plugin->inst));
@@ -235,7 +230,7 @@ cleanup:
 		unload_plugin(&plugin);
 	}
 
-	return (result);
+	return result;
 }
 
 isc_result_t
@@ -255,7 +250,7 @@ cleanup:
 		unload_plugin(&plugin);
 	}
 
-	return (result);
+	return result;
 }
 
 void
@@ -279,7 +274,7 @@ ns_hooktable_create(isc_mem_t *mctx, ns_hooktable_t **tablep) {
 
 	*tablep = hooktable;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 void

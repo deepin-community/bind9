@@ -183,6 +183,12 @@ struct dns_view {
 	uint32_t	      fail_ttl;
 	dns_badcache_t	     *failcache;
 	unsigned int	      udpsize;
+	uint32_t	      sig0key_checks_limit;
+	uint32_t	      sig0message_checks_limit;
+	uint32_t	      maxrrperset;
+	uint32_t	      maxtypepername;
+	uint16_t	      max_queries;
+	uint8_t		      max_restarts;
 
 	/*
 	 * Configurable data for server use only,
@@ -260,8 +266,9 @@ struct dns_view {
 #endif /* HAVE_LMDB */
 
 isc_result_t
-dns_view_create(isc_mem_t *mctx, dns_dispatchmgr_t *dispmgr,
-		dns_rdataclass_t rdclass, const char *name, dns_view_t **viewp);
+dns_view_create(isc_mem_t *mctx, isc_loopmgr_t *loopmgr,
+		dns_dispatchmgr_t *dispmgr, dns_rdataclass_t rdclass,
+		const char *name, dns_view_t **viewp);
 /*%<
  * Create a view.
  *
@@ -366,9 +373,8 @@ dns_view_weakdetach(dns_view_t **targetp);
  */
 
 isc_result_t
-dns_view_createresolver(dns_view_t *view, isc_loopmgr_t *loopmgr,
-			isc_nm_t *netmgr, unsigned int options,
-			isc_tlsctx_cache_t *tlsctx_cache,
+dns_view_createresolver(dns_view_t *view, isc_nm_t *netmgr,
+			unsigned int options, isc_tlsctx_cache_t *tlsctx_cache,
 			dns_dispatch_t *dispatchv4, dns_dispatch_t *dispatchv6);
 /*%<
  * Create a resolver and address database for the view.
@@ -1244,6 +1250,18 @@ dns_view_getresolver(dns_view_t *view, dns_resolver_t **resolverp);
  */
 
 void
+dns_view_setmaxrrperset(dns_view_t *view, uint32_t value);
+/*%<
+ * Set the maximum resource records per RRSet that can be cached.
+ */
+
+void
+dns_view_setmaxtypepername(dns_view_t *view, uint32_t value);
+/*%<
+ * Set the maximum resource record types per owner name that can be cached.
+ */
+
+void
 dns_view_setudpsize(dns_view_t *view, uint16_t udpsize);
 /*%<
  * Set the EDNS UDP buffer size advertised by the server.
@@ -1312,6 +1330,30 @@ dns_view_getadb(dns_view_t *view, dns_adb_t **adbp);
  *
  *\li	'view' is a valid view.
  *\li	'adbp' is non-NULL and '*adbp' is NULL.
+ */
+
+void
+dns_view_setmaxrestarts(dns_view_t *view, uint8_t max_restarts);
+/*%<
+ * Set the number of permissible chained queries before we give up,
+ * to prevent CNAME loops. This defaults to 11.
+ *
+ * Requires:
+ *
+ *\li	'view' is valid;
+ *\li	'max_restarts' is greater than 0.
+ */
+
+void
+dns_view_setmaxqueries(dns_view_t *view, uint16_t max_queries);
+/*%
+ * Set the number of permissible outgoing queries before we give up.
+ * This defaults to 200.
+ *
+ * Requires:
+ *
+ *\li	'view' is valid;
+ *\li	'max_queries' is greater than 0.
  */
 
 ISC_LANG_ENDDECLS

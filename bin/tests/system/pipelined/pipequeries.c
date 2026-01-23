@@ -41,12 +41,12 @@
 #include <dns/types.h>
 #include <dns/view.h>
 
-#define CHECK(str, x)                                        \
+#define CHECKM(str, x)                                       \
 	{                                                    \
 		if ((x) != ISC_R_SUCCESS) {                  \
 			fprintf(stderr, "I:%s: %s\n", (str), \
 				isc_result_totext(x));       \
-			exit(-1);                            \
+			exit(EXIT_FAILURE);                  \
 		}                                            \
 	}
 
@@ -76,7 +76,7 @@ recvresponse(void *arg) {
 	if (result != ISC_R_SUCCESS) {
 		fprintf(stderr, "I:request event result: %s\n",
 			isc_result_totext(result));
-		exit(-1);
+		exit(EXIT_FAILURE);
 	}
 
 	dns_message_create(mctx, NULL, NULL, DNS_MESSAGE_INTENTPARSE,
@@ -84,13 +84,13 @@ recvresponse(void *arg) {
 
 	result = dns_request_getresponse(request, response,
 					 DNS_MESSAGEPARSE_PRESERVEORDER);
-	CHECK("dns_request_getresponse", result);
+	CHECKM("dns_request_getresponse", result);
 
 	if (response->rcode != dns_rcode_noerror) {
 		result = dns_result_fromrcode(response->rcode);
 		fprintf(stderr, "I:response rcode: %s\n",
 			isc_result_totext(result));
-		exit(-1);
+		exit(EXIT_FAILURE);
 	}
 	if (response->counts[DNS_SECTION_ANSWER] != 1U) {
 		fprintf(stderr, "I:response answer count (%u!=1)\n",
@@ -101,7 +101,7 @@ recvresponse(void *arg) {
 	result = dns_message_sectiontotext(
 		response, DNS_SECTION_ANSWER, &dns_master_style_simple,
 		DNS_MESSAGETEXTFLAG_NOCOMMENTS, &outbuf);
-	CHECK("dns_message_sectiontotext", result);
+	CHECKM("dns_message_sectiontotext", result);
 	printf("%.*s", (int)isc_buffer_usedlength(&outbuf),
 	       (char *)isc_buffer_base(&outbuf));
 	fflush(stdout);
@@ -130,7 +130,7 @@ sendquery(void) {
 
 	c = scanf("%255s", host);
 	if (c == EOF) {
-		return (ISC_R_NOMORE);
+		return ISC_R_NOMORE;
 	}
 
 	onfly++;
@@ -140,7 +140,7 @@ sendquery(void) {
 	isc_buffer_add(&buf, strlen(host));
 	result = dns_name_fromtext(dns_fixedname_name(&queryname), &buf,
 				   dns_rootname, 0, NULL);
-	CHECK("dns_name_fromtext", result);
+	CHECKM("dns_name_fromtext", result);
 
 	dns_message_create(mctx, NULL, NULL, DNS_MESSAGE_INTENTRENDER,
 			   &message);
@@ -164,9 +164,9 @@ sendquery(void) {
 		requestmgr, message, have_src ? &srcaddr : NULL, &dstaddr, NULL,
 		NULL, DNS_REQUESTOPT_TCP, NULL, TIMEOUT, 0, 0,
 		isc_loop_main(loopmgr), recvresponse, message, &request);
-	CHECK("dns_request_create", result);
+	CHECKM("dns_request_create", result);
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static void
@@ -234,7 +234,7 @@ main(int argc, char *argv[]) {
 			if (result != ISC_R_SUCCESS) {
 				fprintf(stderr, "bad port '%s'\n",
 					isc_commandline_argument);
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 			break;
 		case 'r':
@@ -261,13 +261,13 @@ main(int argc, char *argv[]) {
 
 	result = ISC_R_FAILURE;
 	if (inet_pton(AF_INET, "10.53.0.7", &inaddr) != 1) {
-		CHECK("inet_pton", result);
+		CHECKM("inet_pton", result);
 	}
 	isc_sockaddr_fromin(&srcaddr, &inaddr, 0);
 
 	result = ISC_R_FAILURE;
 	if (inet_pton(AF_INET, "10.53.0.4", &inaddr) != 1) {
-		CHECK("inet_pton", result);
+		CHECKM("inet_pton", result);
 	}
 	isc_sockaddr_fromin(&dstaddr, &inaddr, port);
 
@@ -284,7 +284,7 @@ main(int argc, char *argv[]) {
 	RUNCHECK(dns_requestmgr_create(mctx, loopmgr, dispatchmgr, dispatchv4,
 				       NULL, &requestmgr));
 
-	RUNCHECK(dns_view_create(mctx, NULL, 0, "_test", &view));
+	RUNCHECK(dns_view_create(mctx, loopmgr, NULL, 0, "_test", &view));
 
 	isc_loopmgr_setup(loopmgr, sendqueries, NULL);
 	isc_loopmgr_teardown(loopmgr, teardown_view, view);
@@ -300,5 +300,5 @@ main(int argc, char *argv[]) {
 
 	isc_managers_destroy(&mctx, &loopmgr, &netmgr);
 
-	return (0);
+	return 0;
 }

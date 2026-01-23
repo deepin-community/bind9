@@ -29,13 +29,6 @@
 #include <dns/view.h>
 #include <dns/zone.h>
 
-#define CHECK(op)                            \
-	do {                                 \
-		result = (op);               \
-		if (result != ISC_R_SUCCESS) \
-			goto cleanup;        \
-	} while (0)
-
 typedef struct dyndb_implementation dyndb_implementation_t;
 struct dyndb_implementation {
 	isc_mem_t *mctx;
@@ -73,10 +66,10 @@ impfind(const char *name) {
 	     imp = ISC_LIST_NEXT(imp, link))
 	{
 		if (strcasecmp(name, imp->name) == 0) {
-			return (imp);
+			return imp;
 		}
 	}
-	return (NULL);
+	return NULL;
 }
 
 static isc_result_t
@@ -99,12 +92,12 @@ load_symbol(uv_lib_t *handle, const char *filename, const char *symbol_name,
 			      "failed to lookup symbol %s in "
 			      "DynDB module '%s': %s",
 			      symbol_name, filename, errmsg);
-		return (ISC_R_FAILURE);
+		return ISC_R_FAILURE;
 	}
 
 	*symbolp = symbol;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static void
@@ -169,7 +162,7 @@ load_library(isc_mem_t *mctx, const char *filename, const char *instname,
 
 	*impp = imp;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 
 cleanup:
 	isc_log_write(dns_lctx, DNS_LOGCATEGORY_DATABASE, DNS_LOGMODULE_DYNDB,
@@ -180,7 +173,7 @@ cleanup:
 
 	unload_library(&imp);
 
-	return (result);
+	return result;
 }
 
 static void
@@ -235,7 +228,7 @@ cleanup:
 	}
 
 	UNLOCK(&dyndb_lock);
-	return (result);
+	return result;
 }
 
 void
@@ -292,7 +285,7 @@ dns_dyndb_createctx(isc_mem_t *mctx, const void *hashinit, isc_log_t *lctx,
 
 	*dctxp = dctx;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 void

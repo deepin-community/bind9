@@ -298,6 +298,15 @@ dns_catz_zones_new(isc_mem_t *mctx, isc_loopmgr_t *loopmgr,
  *
  */
 
+void *
+dns_catz_zones_get_udata(dns_catz_zones_t *catzs);
+/*%<
+ * Get the 'udata' member of the zone methods which was set when creating catzs.
+ *
+ * Requires:
+ * \li	'catzs' is a valid dns_catz_zones_t.
+ */
+
 isc_result_t
 dns_catz_zone_add(dns_catz_zones_t *catzs, const dns_name_t *name,
 		  dns_catz_zone_t **catzp);
@@ -399,6 +408,24 @@ dns_catz_zones_shutdown(dns_catz_zones_t *catzs);
 
 typedef void (*dns_catz_entry_cb2)(dns_catz_entry_t *entry, void *arg1,
 				   void *arg2);
+
+void
+dns_catz_zone_prereconfig(dns_catz_zone_t *catz);
+/*%<
+ * Must be called before reconfiguring a catalog zone. Locks the catalog zone.
+ *
+ * Requires:
+ * \li	'catz' is a valid, unlocked dns_catz_zone_t.
+ */
+
+void
+dns_catz_zone_postreconfig(dns_catz_zone_t *catz);
+/*%<
+ * Must be called after reconfiguring a catalog zone. Unlocks the catalog zone.
+ *
+ * Requires:
+ * \li	'catz' is a valid, locked dns_catz_zone_t.
+ */
 
 void
 dns_catz_zone_for_each_entry2(dns_catz_zone_t *catz, dns_catz_entry_cb2 cb,

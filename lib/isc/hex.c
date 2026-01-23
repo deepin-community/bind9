@@ -38,13 +38,6 @@ const uint8_t isc__hex_char[256] = {
 #undef U
 #undef L
 
-#define RETERR(x)                        \
-	do {                             \
-		isc_result_t _r = (x);   \
-		if (_r != ISC_R_SUCCESS) \
-			return ((_r));   \
-	} while (0)
-
 /*
  * BEW: These static functions are copied from lib/dns/rdata.c.
  */
@@ -80,7 +73,7 @@ isc_hex_totext(isc_region_t *source, int wordlength, const char *wordbreak,
 			RETERR(str_totext(wordbreak, target));
 		}
 	}
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 /*%
@@ -106,7 +99,7 @@ hex_decode_char(hex_decode_ctx_t *ctx, int c) {
 
 	hexval = isc_hex_char(c);
 	if (hexval == 0) {
-		return (ISC_R_BADHEX);
+		return ISC_R_BADHEX;
 	}
 	ctx->val[ctx->digits++] = c - hexval;
 	if (ctx->digits == 2) {
@@ -116,25 +109,25 @@ hex_decode_char(hex_decode_ctx_t *ctx, int c) {
 		RETERR(mem_tobuffer(ctx->target, &num, 1));
 		if (ctx->length >= 0) {
 			if (ctx->length == 0) {
-				return (ISC_R_BADHEX);
+				return ISC_R_BADHEX;
 			} else {
 				ctx->length -= 1;
 			}
 		}
 		ctx->digits = 0;
 	}
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static isc_result_t
 hex_decode_finish(hex_decode_ctx_t *ctx) {
 	if (ctx->length > 0) {
-		return (ISC_R_UNEXPECTEDEND);
+		return ISC_R_UNEXPECTEDEND;
 	}
 	if (ctx->digits != 0) {
-		return (ISC_R_BADHEX);
+		return ISC_R_BADHEX;
 	}
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 isc_result_t
@@ -174,9 +167,9 @@ isc_hex_tobuffer(isc_lex_t *lexer, isc_buffer_t *target, int length) {
 	}
 	RETERR(hex_decode_finish(&ctx));
 	if (length == -2 && before == after) {
-		return (ISC_R_UNEXPECTEDEND);
+		return ISC_R_UNEXPECTEDEND;
 	}
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 isc_result_t
@@ -195,7 +188,7 @@ isc_hex_decodestring(const char *cstr, isc_buffer_t *target) {
 		RETERR(hex_decode_char(&ctx, c));
 	}
 	RETERR(hex_decode_finish(&ctx));
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static isc_result_t
@@ -207,12 +200,12 @@ str_totext(const char *source, isc_buffer_t *target) {
 	l = strlen(source);
 
 	if (l > region.length) {
-		return (ISC_R_NOSPACE);
+		return ISC_R_NOSPACE;
 	}
 
 	memmove(region.base, source, l);
 	isc_buffer_add(target, l);
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static isc_result_t
@@ -221,9 +214,9 @@ mem_tobuffer(isc_buffer_t *target, void *base, unsigned int length) {
 
 	isc_buffer_availableregion(target, &tr);
 	if (length > tr.length) {
-		return (ISC_R_NOSPACE);
+		return ISC_R_NOSPACE;
 	}
 	memmove(tr.base, base, length);
 	isc_buffer_add(target, length);
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }

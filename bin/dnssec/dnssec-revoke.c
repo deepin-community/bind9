@@ -39,10 +39,10 @@ const char *program = "dnssec-revoke";
 static isc_mem_t *mctx = NULL;
 
 noreturn static void
-usage(void);
+usage(int ret);
 
 static void
-usage(void) {
+usage(int ret) {
 	fprintf(stderr, "Usage:\n");
 	fprintf(stderr, "    %s [options] keyfile\n\n", program);
 	fprintf(stderr, "Version: %s\n", PACKAGE_VERSION);
@@ -58,7 +58,7 @@ usage(void) {
 	fprintf(stderr, "     K<name>+<alg>+<new id>.key, "
 			"K<name>+<alg>+<new id>.private\n");
 
-	exit(-1);
+	exit(ret);
 }
 
 int
@@ -79,7 +79,7 @@ main(int argc, char **argv) {
 	bool id = false;
 
 	if (argc == 1) {
-		usage();
+		usage(EXIT_FAILURE);
 	}
 
 	isc_mem_create(&mctx);
@@ -118,10 +118,12 @@ main(int argc, char **argv) {
 				fprintf(stderr, "%s: invalid argument -%c\n",
 					program, isc_commandline_option);
 			}
-			FALLTHROUGH;
+			/* Does not return. */
+			usage(EXIT_FAILURE);
+
 		case 'h':
 			/* Does not return. */
-			usage();
+			usage(EXIT_SUCCESS);
 
 		case 'V':
 			/* Does not return. */
@@ -130,7 +132,7 @@ main(int argc, char **argv) {
 		default:
 			fprintf(stderr, "%s: unhandled option -%c\n", program,
 				isc_commandline_option);
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -257,5 +259,5 @@ cleanup:
 	}
 	isc_mem_destroy(&mctx);
 
-	return (0);
+	return 0;
 }

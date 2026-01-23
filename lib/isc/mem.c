@@ -13,15 +13,15 @@
 
 /*! \file */
 
-#include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
-#include <isc/align.h>
+#include <isc/backtrace.h>
 #include <isc/hash.h>
 #include <isc/magic.h>
 #include <isc/mem.h>
@@ -69,6 +69,8 @@ unsigned int isc_mem_defaultflags = ISC_MEMFLAG_DEFAULT;
 
 #define ISC_MEM_ILLEGAL_ARENA (UINT_MAX)
 
+volatile void *isc__mem_malloc = mallocx;
+
 /*
  * Constants.
  */
@@ -84,11 +86,12 @@ unsigned int isc_mem_defaultflags = ISC_MEMFLAG_DEFAULT;
 #if ISC_MEM_TRACKLINES
 typedef struct debuglink debuglink_t;
 struct debuglink {
+	size_t dlsize;
 	ISC_LINK(debuglink_t) link;
 	const void *ptr;
 	size_t size;
-	const char *file;
 	unsigned int line;
+	const char file[];
 };
 
 typedef ISC_LIST(debuglink_t) debuglist_t;
@@ -166,6 +169,86 @@ struct isc_mempool {
  * Private Inline-able.
  */
 
+static size_t
+total_inuse(void) {
+	size_t inuse = 0;
+	LOCK(&contextslock);
+	for (isc_mem_t *ctx = ISC_LIST_HEAD(contexts); ctx != NULL;
+	     ctx = ISC_LIST_NEXT(ctx, link))
+	{
+		inuse += isc_mem_inuse(ctx);
+	}
+	UNLOCK(&contextslock);
+
+	return inuse;
+}
+
+static void
+write_string(int fd, const char *str) {
+	int r = write(fd, str, strlen(str));
+	if (r == -1) {
+		abort();
+	}
+}
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x)  STRINGIFY(x)
+static void
+write_size(int fd, size_t size) {
+	char buf[sizeof(TOSTRING(SIZE_MAX)) + 1] = { 0 };
+
+	char *str = buf + (sizeof(buf) - 1);
+
+	if (size == 0) {
+		*--str = '0';
+	} else {
+		while (size) {
+			*--str = '0' + (size % 10);
+			size /= 10;
+		}
+	}
+
+	write_string(fd, str);
+}
+#undef TOSTRING
+#undef STRINGIFY
+
+static void
+write_errno(int fd, int errnum) {
+	char buf[BUFSIZ] = { 0 };
+	int ret = isc_string_strerror_r(errnum, buf, sizeof(buf));
+	if (ret == 0) {
+		write_string(fd, buf);
+	}
+}
+
+static void
+write_backtrace(int fd) {
+	void *tracebuf[ISC_BACKTRACE_MAXFRAME];
+	int nframes = isc_backtrace(tracebuf, ISC_BACKTRACE_MAXFRAME);
+
+	if (nframes > 0) {
+		isc_backtrace_symbols_fd(tracebuf, nframes, fd);
+	}
+}
+
+#define CHECK_OOM(ptr, size) (void)((ptr != NULL) || (oom(size), false))
+
+static void
+oom(size_t size) {
+	int fd = fileno(stderr);
+	write_string(fd, "Out of memory (trying to allocate ");
+	write_size(fd, size);
+	write_string(fd, ", total ");
+	write_size(fd, total_inuse());
+	write_string(fd, "): ");
+	write_errno(fd, errno);
+	write_string(fd, "\n");
+	write_backtrace(fd);
+
+	abort();
+}
+
 #if !ISC_MEM_TRACKLINES
 #define ADD_TRACE(mctx, ptr, size, file, line)
 #define DELETE_TRACE(mctx, ptr, size, file, line)
@@ -200,6 +283,15 @@ add_trace_entry(isc_mem_t *mctx, const void *ptr, size_t size FLARG) {
 	uint32_t hash;
 	uint32_t idx;
 
+	/*
+	 * "file" needs to be copied because it can be part of a dynamically
+	 * loaded plugin which would be unloaded at the time the trace is
+	 * dumped. Storing "file" pointer then leads to a dangling pointer
+	 * dereference and a crash.
+	 */
+	size_t filelen = strlen(file) + 1;
+	size_t dlsize = STRUCT_FLEX_SIZE(dl, file, filelen);
+
 	MCTXLOCK(mctx);
 
 	if ((mctx->debugging & ISC_MEM_DEBUGTRACE) != 0) {
@@ -222,14 +314,15 @@ add_trace_entry(isc_mem_t *mctx, const void *ptr, size_t size FLARG) {
 #endif
 	idx = hash % DEBUG_TABLE_COUNT;
 
-	dl = mallocx(sizeof(debuglink_t), mctx->jemalloc_flags);
-	INSIST(dl != NULL);
+	dl = mallocx(dlsize, mctx->jemalloc_flags);
+	CHECK_OOM(dl, dlsize);
 
 	ISC_LINK_INIT(dl, link);
 	dl->ptr = ptr;
 	dl->size = size;
-	dl->file = file;
 	dl->line = line;
+	dl->dlsize = dlsize;
+	strlcpy((char *)dl->file, file, filelen);
 
 	ISC_LIST_PREPEND(mctx->debuglist[idx], dl, link);
 	mctx->debuglistcnt++;
@@ -270,7 +363,7 @@ delete_trace_entry(isc_mem_t *mctx, const void *ptr, size_t size,
 	while (dl != NULL) {
 		if (dl->ptr == ptr) {
 			ISC_LIST_UNLINK(mctx->debuglist[idx], dl, link);
-			sdallocx(dl, sizeof(*dl), mctx->jemalloc_flags);
+			sdallocx(dl, dl->dlsize, mctx->jemalloc_flags);
 			goto unlock;
 		}
 		dl = ISC_LIST_NEXT(dl, link);
@@ -296,20 +389,18 @@ unlock:
  */
 static void *
 mem_get(isc_mem_t *ctx, size_t size, int flags) {
-	char *ret = NULL;
-
 	ADJUST_ZERO_ALLOCATION_SIZE(size);
 
-	ret = mallocx(size, flags | ctx->jemalloc_flags);
-	INSIST(ret != NULL);
+	void *ptr = mallocx(size, flags | ctx->jemalloc_flags);
+	CHECK_OOM(ptr, size);
 
 	if ((flags & ISC__MEM_ZERO) == 0 &&
 	    (ctx->flags & ISC_MEMFLAG_FILL) != 0)
 	{
-		memset(ret, 0xbe, size); /* Mnemonic for "beef". */
+		memset(ptr, 0xbe, size); /* Mnemonic for "beef". */
 	}
 
-	return (ret);
+	return ptr;
 }
 
 /*!
@@ -334,7 +425,7 @@ mem_realloc(isc_mem_t *ctx, void *old_ptr, size_t old_size, size_t new_size,
 	ADJUST_ZERO_ALLOCATION_SIZE(new_size);
 
 	new_ptr = rallocx(old_ptr, new_size, flags | ctx->jemalloc_flags);
-	INSIST(new_ptr != NULL);
+	CHECK_OOM(new_ptr, new_size);
 
 	if ((flags & ISC__MEM_ZERO) == 0 &&
 	    (ctx->flags & ISC_MEMFLAG_FILL) != 0)
@@ -347,7 +438,7 @@ mem_realloc(isc_mem_t *ctx, void *old_ptr, size_t old_size, size_t new_size,
 		}
 	}
 
-	return (new_ptr);
+	return new_ptr;
 }
 
 /*!
@@ -382,15 +473,15 @@ mem_jemalloc_arena_create(unsigned int *pnew_arenano) {
 
 	res = mallctl("arenas.create", &arenano, &len, NULL, 0);
 	if (res != 0) {
-		return (false);
+		return false;
 	}
 
 	*pnew_arenano = arenano;
 
-	return (true);
+	return true;
 #else
 	*pnew_arenano = ISC_MEM_ILLEGAL_ARENA;
-	return (true);
+	return true;
 #endif /* JEMALLOC_API_SUPPORTED */
 }
 
@@ -403,13 +494,13 @@ mem_jemalloc_arena_destroy(unsigned int arenano) {
 	(void)snprintf(buf, sizeof(buf), "arena.%u.destroy", arenano);
 	res = mallctl(buf, NULL, NULL, NULL, 0);
 	if (res != 0) {
-		return (false);
+		return false;
 	}
 
-	return (true);
+	return true;
 #else
 	UNUSED(arenano);
-	return (true);
+	return true;
 #endif /* JEMALLOC_API_SUPPORTED */
 }
 
@@ -433,9 +524,19 @@ isc__mem_initialize(void) {
 
 static void
 mem_shutdown(void) {
+	bool empty;
+
+	rcu_barrier();
+
 	isc__mem_checkdestroyed();
 
-	isc_mutex_destroy(&contextslock);
+	LOCK(&contextslock);
+	empty = ISC_LIST_EMPTY(contexts);
+	UNLOCK(&contextslock);
+
+	if (empty) {
+		isc_mutex_destroy(&contextslock);
+	}
 }
 
 void
@@ -451,7 +552,7 @@ mem_create(isc_mem_t **ctxp, unsigned int debugging, unsigned int flags,
 	REQUIRE(ctxp != NULL && *ctxp == NULL);
 
 	ctx = mallocx(sizeof(*ctx), jemalloc_flags);
-	INSIST(ctx != NULL);
+	CHECK_OOM(ctx, sizeof(*ctx));
 
 	*ctx = (isc_mem_t){
 		.magic = MEM_MAGIC,
@@ -476,11 +577,11 @@ mem_create(isc_mem_t **ctxp, unsigned int debugging, unsigned int flags,
 #if ISC_MEM_TRACKLINES
 	if ((ctx->debugging & ISC_MEM_DEBUGRECORD) != 0) {
 		unsigned int i;
+		size_t debuglist_size = ISC_CHECKED_MUL(DEBUG_TABLE_COUNT,
+							sizeof(debuglist_t));
 
-		ctx->debuglist = mallocx(
-			ISC_CHECKED_MUL(DEBUG_TABLE_COUNT, sizeof(debuglist_t)),
-			jemalloc_flags);
-		INSIST(ctx->debuglist != NULL);
+		ctx->debuglist = mallocx(debuglist_size, jemalloc_flags);
+		CHECK_OOM(ctx->debuglist, debuglist_size);
 
 		for (i = 0; i < DEBUG_TABLE_COUNT; i++) {
 			ISC_LIST_INIT(ctx->debuglist[i]);
@@ -592,24 +693,15 @@ isc__mem_detach(isc_mem_t **ctxp FLARG) {
 void
 isc__mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size,
 		      int flags FLARG) {
-	isc_mem_t *ctx = NULL;
-
 	REQUIRE(ctxp != NULL && VALID_CONTEXT(*ctxp));
 	REQUIRE(ptr != NULL);
 	REQUIRE(size != 0);
 
-	ctx = *ctxp;
+	isc_mem_t *ctx = *ctxp;
 	*ctxp = NULL;
 
-	DELETE_TRACE(ctx, ptr, size, file, line);
-
-	mem_putstats(ctx, size);
-	mem_put(ctx, ptr, size, flags);
-
-	if (isc_refcount_decrement(&ctx->references) == 1) {
-		isc_refcount_destroy(&ctx->references);
-		destroy(ctx);
-	}
+	isc__mem_put(ctx, ptr, size, flags FLARG_PASS);
+	isc__mem_detach(&ctx FLARG_PASS);
 }
 
 void
@@ -626,26 +718,6 @@ isc__mem_destroy(isc_mem_t **ctxp FLARG) {
 	ctx = *ctxp;
 	*ctxp = NULL;
 
-	/*
-	 * wait for asynchronous memory reclamation to complete
-	 * before checking for memory leaks.
-	 *
-	 * Because rcu_barrier() needs to be called as many times
-	 * as the number of nested call_rcu() calls (call_rcu()
-	 * calls made from call_rcu thread), and currently there's
-	 * no mechanism to detect whether there are more call_rcu
-	 * callbacks scheduled, we simply call the rcu_barrier()
-	 * multiple times.  The overhead is negligible and it
-	 * prevents rare assertion failures caused by the check
-	 * for memory leaks below.
-	 *
-	 * If there's more nested call_rcu() calls than five levels,
-	 * we are doing something horribly wrong...
-	 */
-	rcu_barrier();
-	rcu_barrier();
-	rcu_barrier();
-	rcu_barrier();
 	rcu_barrier();
 
 #if ISC_MEM_TRACKLINES
@@ -677,7 +749,7 @@ isc__mem_get(isc_mem_t *ctx, size_t size, int flags FLARG) {
 	mem_getstats(ctx, size);
 	ADD_TRACE(ctx, ptr, size, file, line);
 
-	return (ptr);
+	return ptr;
 }
 
 void
@@ -783,7 +855,7 @@ isc__mem_allocate(isc_mem_t *ctx, size_t size, int flags FLARG) {
 	mem_getstats(ctx, size);
 	ADD_TRACE(ctx, ptr, size, file, line);
 
-	return (ptr);
+	return ptr;
 }
 
 void *
@@ -812,7 +884,7 @@ isc__mem_reget(isc_mem_t *ctx, void *old_ptr, size_t old_size, size_t new_size,
 		 */
 	}
 
-	return (new_ptr);
+	return new_ptr;
 }
 
 void *
@@ -847,7 +919,7 @@ isc__mem_reallocate(isc_mem_t *ctx, void *old_ptr, size_t new_size,
 		 */
 	}
 
-	return (new_ptr);
+	return new_ptr;
 }
 
 void
@@ -883,7 +955,7 @@ isc__mem_strdup(isc_mem_t *mctx, const char *s FLARG) {
 
 	strlcpy(ns, s, len);
 
-	return (ns);
+	return ns;
 }
 
 char *
@@ -904,7 +976,7 @@ isc__mem_strndup(isc_mem_t *mctx, const char *s, size_t size FLARG) {
 
 	strlcpy(ns, s, len);
 
-	return (ns);
+	return ns;
 }
 
 void
@@ -922,7 +994,7 @@ size_t
 isc_mem_inuse(isc_mem_t *ctx) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
-	return (atomic_load_relaxed(&ctx->inuse));
+	return atomic_load_relaxed(&ctx->inuse);
 }
 
 void
@@ -951,12 +1023,12 @@ isc_mem_isovermem(isc_mem_t *ctx) {
 		/* We are not overmem, check whether we should be? */
 		size_t hiwater = atomic_load_relaxed(&ctx->hi_water);
 		if (hiwater == 0) {
-			return (false);
+			return false;
 		}
 
 		size_t inuse = atomic_load_relaxed(&ctx->inuse);
 		if (inuse <= hiwater) {
-			return (false);
+			return false;
 		}
 
 		if ((isc_mem_debugging & ISC_MEM_DEBUGUSAGE) != 0) {
@@ -966,17 +1038,17 @@ isc_mem_isovermem(isc_mem_t *ctx) {
 		}
 
 		atomic_store_relaxed(&ctx->is_overmem, true);
-		return (true);
+		return true;
 	} else {
 		/* We are overmem, check whether we should not be? */
 		size_t lowater = atomic_load_relaxed(&ctx->lo_water);
 		if (lowater == 0) {
-			return (false);
+			return false;
 		}
 
 		size_t inuse = atomic_load_relaxed(&ctx->inuse);
 		if (inuse >= lowater) {
-			return (true);
+			return true;
 		}
 
 		if ((isc_mem_debugging & ISC_MEM_DEBUGUSAGE) != 0) {
@@ -985,7 +1057,7 @@ isc_mem_isovermem(isc_mem_t *ctx) {
 				inuse, lowater);
 		}
 		atomic_store_relaxed(&ctx->is_overmem, false);
-		return (false);
+		return false;
 	}
 }
 
@@ -1003,10 +1075,10 @@ isc_mem_getname(isc_mem_t *ctx) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
 	if (ctx->name[0] == 0) {
-		return ("");
+		return "";
 	}
 
-	return (ctx->name);
+	return ctx->name;
 }
 
 /*
@@ -1159,7 +1231,7 @@ isc__mempool_get(isc_mempool_t *restrict mpctx FLARG) {
 
 	ADD_TRACE(mpctx->mctx, item, mpctx->size, file, line);
 
-	return (item);
+	return item;
 }
 
 /* coverity[+free : arg-1] */
@@ -1216,21 +1288,21 @@ unsigned int
 isc_mempool_getfreemax(isc_mempool_t *restrict mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 
-	return (mpctx->freemax);
+	return mpctx->freemax;
 }
 
 unsigned int
 isc_mempool_getfreecount(isc_mempool_t *restrict mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 
-	return (mpctx->freecount);
+	return mpctx->freecount;
 }
 
 unsigned int
 isc_mempool_getallocated(isc_mempool_t *restrict mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 
-	return (mpctx->allocated);
+	return mpctx->allocated;
 }
 
 void
@@ -1246,7 +1318,7 @@ unsigned int
 isc_mempool_getfillcount(isc_mempool_t *restrict mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 
-	return (mpctx->fillcount);
+	return mpctx->fillcount;
 }
 
 /*
@@ -1298,7 +1370,7 @@ isc__mem_checkdestroyed(void) {
 
 unsigned int
 isc_mem_references(isc_mem_t *ctx) {
-	return (isc_refcount_current(&ctx->references));
+	return isc_refcount_current(&ctx->references);
 }
 
 #ifdef HAVE_LIBXML2
@@ -1366,7 +1438,7 @@ xml_renderctx(isc_mem_t *ctx, size_t *inuse, xmlTextWriterPtr writer) {
 error:
 	MCTXUNLOCK(ctx);
 
-	return (xmlrc);
+	return xmlrc;
 }
 
 int
@@ -1406,7 +1478,7 @@ isc_mem_renderxml(void *writer0) {
 
 	TRY0(xmlTextWriterEndElement(writer)); /* summary */
 error:
-	return (xmlrc);
+	return xmlrc;
 }
 
 #endif /* HAVE_LIBXML2 */
@@ -1466,7 +1538,7 @@ json_renderctx(isc_mem_t *ctx, size_t *inuse, json_object *array) {
 
 	MCTXUNLOCK(ctx);
 	json_object_array_add(array, ctxobj);
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 isc_result_t
@@ -1501,13 +1573,13 @@ isc_mem_renderjson(void *memobj0) {
 	json_object_object_add(memobj, "Malloced", obj);
 
 	json_object_object_add(memobj, "contexts", ctxarray);
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 
 error:
 	if (ctxarray != NULL) {
 		json_object_put(ctxarray);
 	}
-	return (result);
+	return result;
 }
 #endif /* HAVE_JSON_C */
 
@@ -1556,7 +1628,7 @@ jemalloc_set_ssize_value(const char *valname, ssize_t newval) {
 	int ret;
 
 	ret = mallctl(valname, NULL, NULL, &newval, sizeof(newval));
-	return (ret == 0);
+	return ret == 0;
 }
 #endif /* JEMALLOC_API_SUPPORTED */
 
@@ -1569,7 +1641,7 @@ mem_set_arena_ssize_value(isc_mem_t *mctx, const char *arena_valname,
 	char buf[256] = { 0 };
 
 	if (mctx->jemalloc_arena == ISC_MEM_ILLEGAL_ARENA) {
-		return (ISC_R_UNEXPECTED);
+		return ISC_R_UNEXPECTED;
 	}
 
 	(void)snprintf(buf, sizeof(buf), "arena.%u.%s", mctx->jemalloc_arena,
@@ -1578,25 +1650,25 @@ mem_set_arena_ssize_value(isc_mem_t *mctx, const char *arena_valname,
 	ret = jemalloc_set_ssize_value(buf, newval);
 
 	if (!ret) {
-		return (ISC_R_FAILURE);
+		return ISC_R_FAILURE;
 	}
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 #else
 	UNUSED(arena_valname);
 	UNUSED(newval);
-	return (ISC_R_NOTIMPLEMENTED);
+	return ISC_R_NOTIMPLEMENTED;
 #endif
 }
 
 isc_result_t
 isc_mem_arena_set_muzzy_decay_ms(isc_mem_t *mctx, const ssize_t decay_ms) {
-	return (mem_set_arena_ssize_value(mctx, "muzzy_decay_ms", decay_ms));
+	return mem_set_arena_ssize_value(mctx, "muzzy_decay_ms", decay_ms);
 }
 
 isc_result_t
 isc_mem_arena_set_dirty_decay_ms(isc_mem_t *mctx, const ssize_t decay_ms) {
-	return (mem_set_arena_ssize_value(mctx, "dirty_decay_ms", decay_ms));
+	return mem_set_arena_ssize_value(mctx, "dirty_decay_ms", decay_ms);
 }
 
 void

@@ -56,19 +56,12 @@
 
 #include <dst/dst.h>
 
-#include <isccfg/cfg.h>
-#include <isccfg/grammar.h>
-#include <isccfg/kaspconf.h>
-#include <isccfg/namedconf.h>
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L && OPENSSL_API_LEVEL >= 30000
 #include <openssl/err.h>
 #include <openssl/provider.h>
 #endif
 
 #include "dnssectool.h"
-
-#define MAX_RSA 4096 /* should be long enough... */
-#define MAX_DH	4096 /* should be long enough... */
 
 const char *program = "dnssec-keygen";
 
@@ -82,7 +75,7 @@ static int min_dh = 128;
 isc_log_t *lctx = NULL;
 
 noreturn static void
-usage(void);
+usage(int ret);
 
 static void
 progress(int p);
@@ -92,18 +85,22 @@ struct keygen_ctx {
 	const char *policy;
 	const char *configfile;
 	const char *directory;
+	dns_keystore_t *keystore;
 	char *algname;
 	char *nametype;
 	char *type;
 	int protocol;
 	int size;
+	uint16_t tag_min;
+	uint16_t tag_max;
 	int signatory;
 	dns_rdataclass_t rdclass;
 	int options;
 	int dbits;
 	dns_ttl_t ttl;
-	uint16_t kskflag;
-	uint16_t revflag;
+	bool wantzsk;
+	bool wantksk;
+	bool wantrev;
 	dns_secalg_t alg;
 	/* timing data */
 	int prepub;
@@ -143,7 +140,7 @@ struct keygen_ctx {
 typedef struct keygen_ctx keygen_ctx_t;
 
 static void
-usage(void) {
+usage(int ret) {
 	fprintf(stderr, "Usage:\n");
 	fprintf(stderr, "    %s [options] name\n\n", program);
 	fprintf(stderr, "Version: %s\n", PACKAGE_VERSION);
@@ -155,7 +152,8 @@ usage(void) {
 			"statement\n");
 	fprintf(stderr, "    -a <algorithm>:\n");
 	if (!isc_fips_mode()) {
-		fprintf(stderr, "        RSASHA1 | NSEC3RSASHA1 |\n");
+		fprintf(stderr, "        RSASHA1 (deprecated) | NSEC3RSASHA1 "
+				"(deprecated) |\n");
 	}
 	fprintf(stderr, "        RSASHA256 | RSASHA512 |\n");
 	fprintf(stderr, "        ECDSAP256SHA256 | ECDSAP384SHA384 |\n");
@@ -163,10 +161,11 @@ usage(void) {
 	fprintf(stderr, "    -3: use NSEC3-capable algorithm\n");
 	fprintf(stderr, "    -b <key size in bits>:\n");
 	if (!isc_fips_mode()) {
-		fprintf(stderr, "        RSASHA1:\t[%d..%d]\n", min_rsa,
-			MAX_RSA);
-		fprintf(stderr, "        NSEC3RSASHA1:\t[%d..%d]\n", min_rsa,
-			MAX_RSA);
+		fprintf(stderr, "        RSASHA1 (deprecated) :\t[%d..%d]\n",
+			min_rsa, MAX_RSA);
+		fprintf(stderr,
+			"        NSEC3RSASHA1 (deprecated) :\t[%d..%d]\n",
+			min_rsa, MAX_RSA);
 	}
 	fprintf(stderr, "        RSASHA256:\t[%d..%d]\n", min_rsa, MAX_RSA);
 	fprintf(stderr, "        RSASHA512:\t[%d..%d]\n", min_rsa, MAX_RSA);
@@ -183,9 +182,10 @@ usage(void) {
 	fprintf(stderr, "    -d <digest bits> (0 => max, default)\n");
 	fprintf(stderr, "    -E <engine>:\n");
 	fprintf(stderr, "        name of an OpenSSL engine to use\n");
-	fprintf(stderr, "    -f <keyflag>: KSK | REVOKE\n");
+	fprintf(stderr, "    -f <keyflag>: ZSK | KSK | REVOKE\n");
 	fprintf(stderr, "    -F: FIPS mode\n");
 	fprintf(stderr, "    -L <ttl>: default key TTL\n");
+	fprintf(stderr, "    -M <min>:<max>: allowed Key ID range\n");
 	fprintf(stderr, "    -p <protocol>: (default: 3 [dnssec])\n");
 	fprintf(stderr, "    -s <strength>: strength value this key signs DNS "
 			"records with (default: 0)\n");
@@ -196,7 +196,7 @@ usage(void) {
 			"(default: AUTHCONF)\n");
 	fprintf(stderr, "    -h: print usage and exit\n");
 	fprintf(stderr, "    -m <memory debugging mode>:\n");
-	fprintf(stderr, "       usage | trace | record | size | mctx\n");
+	fprintf(stderr, "       usage | trace | record\n");
 	fprintf(stderr, "    -v <level>: set verbosity level (0 - 10)\n");
 	fprintf(stderr, "    -V: print version information\n");
 	fprintf(stderr, "Timing options:\n");
@@ -226,7 +226,7 @@ usage(void) {
 	fprintf(stderr, "     K<name>+<alg>+<id>.key, "
 			"K<name>+<alg>+<id>.private\n");
 
-	exit(-1);
+	exit(ret);
 }
 
 static void
@@ -251,53 +251,6 @@ progress(int p) {
 	}
 	(void)putc(c, stderr);
 	(void)fflush(stderr);
-}
-
-static void
-kasp_from_conf(cfg_obj_t *config, isc_mem_t *mctx, const char *name,
-	       dns_kasp_t **kaspp) {
-	const cfg_listelt_t *element;
-	const cfg_obj_t *kasps = NULL;
-	dns_kasp_t *kasp = NULL, *kasp_next;
-	isc_result_t result = ISC_R_NOTFOUND;
-	dns_kasplist_t kasplist;
-
-	ISC_LIST_INIT(kasplist);
-
-	(void)cfg_map_get(config, "dnssec-policy", &kasps);
-	for (element = cfg_list_first(kasps); element != NULL;
-	     element = cfg_list_next(element))
-	{
-		cfg_obj_t *kconfig = cfg_listelt_value(element);
-		kasp = NULL;
-		if (strcmp(cfg_obj_asstring(cfg_tuple_get(kconfig, "name")),
-			   name) != 0)
-		{
-			continue;
-		}
-
-		result = cfg_kasp_fromconfig(kconfig, NULL, true, mctx, lctx,
-					     &kasplist, &kasp);
-		if (result != ISC_R_SUCCESS) {
-			fatal("failed to configure dnssec-policy '%s': %s",
-			      cfg_obj_asstring(cfg_tuple_get(kconfig, "name")),
-			      isc_result_totext(result));
-		}
-		INSIST(kasp != NULL);
-		dns_kasp_freeze(kasp);
-		break;
-	}
-
-	*kaspp = kasp;
-
-	/*
-	 * Cleanup kasp list.
-	 */
-	for (kasp = ISC_LIST_HEAD(kasplist); kasp != NULL; kasp = kasp_next) {
-		kasp_next = ISC_LIST_NEXT(kasp, link);
-		ISC_LIST_UNLINK(kasplist, kasp, link);
-		dns_kasp_detach(&kasp);
-	}
 }
 
 static void
@@ -482,10 +435,10 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 			fatal("-S and -G cannot be used together");
 		}
 
-		ret = dst_key_fromnamedfile(
-			ctx->predecessor, ctx->directory,
-			(DST_TYPE_PUBLIC | DST_TYPE_PRIVATE | DST_TYPE_STATE),
-			mctx, &prevkey);
+		ret = dst_key_fromnamedfile(ctx->predecessor, ctx->directory,
+					    DST_TYPE_PUBLIC | DST_TYPE_PRIVATE |
+						    DST_TYPE_STATE,
+					    mctx, &prevkey);
 		if (ret != ISC_R_SUCCESS) {
 			fatal("Invalid keyfile %s: %s", ctx->predecessor,
 			      isc_result_totext(ret));
@@ -551,14 +504,27 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 	}
 
 	switch (ctx->alg) {
-	case DNS_KEYALG_RSASHA1:
-	case DNS_KEYALG_NSEC3RSASHA1:
+	case DST_ALG_RSASHA1:
+	case DST_ALG_NSEC3RSASHA1:
+		dns_secalg_format(ctx->alg, algstr, sizeof(algstr));
+		fprintf(stderr,
+			"WARNING: DNSKEY algorithm '%s' is deprecated. Please "
+			"migrate to another algorithm\n",
+			algstr);
+		break;
+	default:
+		break;
+	}
+
+	switch (ctx->alg) {
+	case DST_ALG_RSASHA1:
+	case DST_ALG_NSEC3RSASHA1:
 		if (isc_fips_mode()) {
 			fatal("SHA1 based keys not supported in FIPS mode");
 		}
 		FALLTHROUGH;
-	case DNS_KEYALG_RSASHA256:
-	case DNS_KEYALG_RSASHA512:
+	case DST_ALG_RSASHA256:
+	case DST_ALG_RSASHA512:
 		if (ctx->size != 0 &&
 		    (ctx->size < min_rsa || ctx->size > MAX_RSA))
 		{
@@ -592,7 +558,7 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 		{
 			flags |= DNS_KEYOWNER_ENTITY;
 		} else if (strcasecmp(ctx->nametype, "user") == 0) {
-			flags |= DNS_KEYOWNER_USER;
+			/* no owner flags */
 		} else {
 			fatal("invalid KEY nametype %s", ctx->nametype);
 		}
@@ -607,8 +573,12 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 	if ((ctx->options & DST_TYPE_KEY) != 0) { /* KEY */
 		flags |= ctx->signatory;
 	} else if ((flags & DNS_KEYOWNER_ZONE) != 0) { /* DNSKEY */
-		flags |= ctx->kskflag;
-		flags |= ctx->revflag;
+		if (ctx->ksk || ctx->wantksk) {
+			flags |= DNS_KEYFLAG_KSK;
+		}
+		if (ctx->wantrev) {
+			flags |= DNS_KEYFLAG_REVOKE;
+		}
 	}
 
 	if (ctx->protocol == -1) {
@@ -622,9 +592,6 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 	if ((flags & DNS_KEYFLAG_TYPEMASK) == DNS_KEYTYPE_NOKEY) {
 		if (ctx->size > 0) {
 			fatal("specified null key with non-zero size");
-		}
-		if ((flags & DNS_KEYFLAG_SIGNATORYMASK) != 0) {
-			fatal("specified null key with signing authority");
 		}
 	}
 
@@ -644,7 +611,9 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 		break;
 	}
 
-	if ((flags & DNS_KEYFLAG_TYPEMASK) == DNS_KEYTYPE_NOKEY) {
+	if ((flags & DNS_KEYFLAG_TYPEMASK) == DNS_KEYTYPE_NOKEY &&
+	    (ctx->options & DST_TYPE_KEY) != 0)
+	{
 		null_key = true;
 	}
 
@@ -655,16 +624,27 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 
 		if (!ctx->quiet && show_progress) {
 			fprintf(stderr, "Generating key pair.");
+		}
+
+		if (ctx->keystore != NULL && ctx->policy != NULL) {
+			ret = dns_keystore_keygen(
+				ctx->keystore, name, ctx->policy, ctx->rdclass,
+				mctx, ctx->alg, ctx->size, flags, &key);
+		} else if (!ctx->quiet && show_progress) {
 			ret = dst_key_generate(name, ctx->alg, ctx->size, param,
 					       flags, ctx->protocol,
-					       ctx->rdclass, mctx, &key,
+					       ctx->rdclass, NULL, mctx, &key,
 					       &progress);
-			putc('\n', stderr);
-			fflush(stderr);
 		} else {
 			ret = dst_key_generate(name, ctx->alg, ctx->size, param,
 					       flags, ctx->protocol,
-					       ctx->rdclass, mctx, &key, NULL);
+					       ctx->rdclass, NULL, mctx, &key,
+					       NULL);
+		}
+
+		if (!ctx->quiet && show_progress) {
+			putc('\n', stderr);
+			fflush(stderr);
 		}
 
 		if (ret != ISC_R_SUCCESS) {
@@ -720,7 +700,7 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 			}
 
 			if (ctx->setrev) {
-				if (ctx->kskflag == 0) {
+				if (!ctx->wantksk) {
 					fprintf(stderr,
 						"%s: warning: Key is "
 						"not flagged as a KSK, but -R "
@@ -795,7 +775,9 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 		 * if there is a risk of ID collision due to this key
 		 * or another key being revoked.
 		 */
-		if (key_collision(key, name, ctx->directory, mctx, NULL)) {
+		if (key_collision(key, name, ctx->directory, mctx, ctx->tag_min,
+				  ctx->tag_max, NULL))
+		{
 			conflict = true;
 			if (null_key) {
 				dst_key_free(&key);
@@ -860,6 +842,18 @@ keygen(keygen_ctx_t *ctx, isc_mem_t *mctx, int argc, char **argv) {
 	}
 }
 
+static void
+check_keystore_options(keygen_ctx_t *ctx) {
+	ctx->directory = dns_keystore_directory(ctx->keystore, NULL);
+	if (ctx->directory != NULL) {
+		isc_result_t ret = try_dir(ctx->directory);
+		if (ret != ISC_R_SUCCESS) {
+			fatal("cannot open directory %s: %s", ctx->directory,
+			      isc_result_totext(ret));
+		}
+	}
+}
+
 int
 main(int argc, char **argv) {
 	char *algname = NULL, *freeit = NULL;
@@ -885,7 +879,7 @@ main(int argc, char **argv) {
 	};
 
 	if (argc == 1) {
-		usage();
+		usage(EXIT_FAILURE);
 	}
 
 	isc_commandline_errprint = false;
@@ -893,8 +887,8 @@ main(int argc, char **argv) {
 	/*
 	 * Process memory debugging argument first.
 	 */
-#define CMDLINE_FLAGS                                        \
-	"3A:a:b:Cc:D:d:E:Ff:GhI:i:K:k:L:l:m:n:P:p:qR:r:S:s:" \
+#define CMDLINE_FLAGS                                          \
+	"3A:a:b:Cc:D:d:E:Ff:GhI:i:K:k:L:l:M:m:n:P:p:qR:r:S:s:" \
 	"T:t:v:V"
 	while ((ch = isc_commandline_parse(argc, argv, CMDLINE_FLAGS)) != -1) {
 		switch (ch) {
@@ -952,9 +946,11 @@ main(int argc, char **argv) {
 		case 'f':
 			c = (unsigned char)(isc_commandline_argument[0]);
 			if (toupper(c) == 'K') {
-				ctx.kskflag = DNS_KEYFLAG_KSK;
+				ctx.wantksk = true;
+			} else if (toupper(c) == 'Z') {
+				ctx.wantzsk = true;
 			} else if (toupper(c) == 'R') {
-				ctx.revflag = DNS_KEYFLAG_REVOKE;
+				ctx.wantrev = true;
 			} else {
 				fatal("unknown flag '%s'",
 				      isc_commandline_argument);
@@ -981,6 +977,21 @@ main(int argc, char **argv) {
 		case 'n':
 			ctx.nametype = isc_commandline_argument;
 			break;
+		case 'M': {
+			unsigned long ul;
+			ctx.tag_min = ul = strtoul(isc_commandline_argument,
+						   &endp, 10);
+			if (*endp != ':' || ul > 0xffff) {
+				fatal("-M range invalid");
+			}
+			ctx.tag_max = ul = strtoul(endp + 1, &endp, 10);
+			if (*endp != '\0' || ul > 0xffff ||
+			    ctx.tag_max <= ctx.tag_min)
+			{
+				fatal("-M range invalid");
+			}
+			break;
+		}
 		case 'm':
 			break;
 		case 'p':
@@ -1123,10 +1134,12 @@ main(int argc, char **argv) {
 				fprintf(stderr, "%s: invalid argument -%c\n",
 					program, isc_commandline_option);
 			}
-			FALLTHROUGH;
+			/* Does not return. */
+			usage(EXIT_FAILURE);
+
 		case 'h':
 			/* Does not return. */
-			usage();
+			usage(EXIT_SUCCESS);
 
 		case 'V':
 			/* Does not return. */
@@ -1135,7 +1148,7 @@ main(int argc, char **argv) {
 		default:
 			fprintf(stderr, "%s: unhandled option -%c\n", program,
 				isc_commandline_option);
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -1228,8 +1241,8 @@ main(int argc, char **argv) {
 		if (ctx.size != -1) {
 			fatal("-k and -b cannot be used together");
 		}
-		if (ctx.kskflag || ctx.revflag) {
-			fatal("-k and -f cannot be used together");
+		if (ctx.wantrev) {
+			fatal("-k and -fR cannot be used together");
 		}
 		if (ctx.options & DST_TYPE_KEY) {
 			fatal("-k and -T KEY cannot be used together");
@@ -1244,12 +1257,13 @@ main(int argc, char **argv) {
 			ctx.use_nsec3 = false;
 			ctx.alg = DST_ALG_ECDSA256;
 			ctx.size = 0;
-			ctx.kskflag = DNS_KEYFLAG_KSK;
 			ctx.ttl = 3600;
 			ctx.setttl = true;
 			ctx.ksk = true;
 			ctx.zsk = true;
 			ctx.lifetime = 0;
+			ctx.tag_min = 0;
+			ctx.tag_max = 0xffff;
 
 			keygen(&ctx, mctx, argc, argv);
 		} else {
@@ -1269,7 +1283,8 @@ main(int argc, char **argv) {
 				      ctx.policy, ctx.configfile);
 			}
 
-			kasp_from_conf(config, mctx, ctx.policy, &kasp);
+			kasp_from_conf(config, mctx, lctx, ctx.policy,
+				       ctx.directory, engine, &kasp);
 			if (kasp == NULL) {
 				fatal("failed to load dnssec-policy '%s'",
 				      ctx.policy);
@@ -1283,22 +1298,28 @@ main(int argc, char **argv) {
 			ctx.ttl = dns_kasp_dnskeyttl(kasp);
 			ctx.setttl = true;
 
-			kaspkey = ISC_LIST_HEAD(dns_kasp_keys(kasp));
-
-			while (kaspkey != NULL) {
+			for (kaspkey = ISC_LIST_HEAD(dns_kasp_keys(kasp));
+			     kaspkey != NULL;
+			     kaspkey = ISC_LIST_NEXT(kaspkey, link))
+			{
 				ctx.use_nsec3 = false;
 				ctx.alg = dns_kasp_key_algorithm(kaspkey);
 				ctx.size = dns_kasp_key_size(kaspkey);
-				ctx.kskflag = dns_kasp_key_ksk(kaspkey)
-						      ? DNS_KEYFLAG_KSK
-						      : 0;
 				ctx.ksk = dns_kasp_key_ksk(kaspkey);
 				ctx.zsk = dns_kasp_key_zsk(kaspkey);
 				ctx.lifetime = dns_kasp_key_lifetime(kaspkey);
-
+				ctx.keystore = dns_kasp_key_keystore(kaspkey);
+				if (ctx.keystore != NULL) {
+					check_keystore_options(&ctx);
+				}
+				ctx.tag_min = dns_kasp_key_tagmin(kaspkey);
+				ctx.tag_max = dns_kasp_key_tagmax(kaspkey);
+				if ((ctx.ksk && !ctx.wantksk && ctx.wantzsk) ||
+				    (ctx.zsk && !ctx.wantzsk && ctx.wantksk))
+				{
+					continue;
+				}
 				keygen(&ctx, mctx, argc, argv);
-
-				kaspkey = ISC_LIST_NEXT(kaspkey, link);
 			}
 
 			dns_kasp_detach(&kasp);
@@ -1328,5 +1349,5 @@ main(int argc, char **argv) {
 		free(freeit);
 	}
 
-	return (0);
+	return 0;
 }

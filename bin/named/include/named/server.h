@@ -65,6 +65,7 @@ struct named_server {
 	dns_zonemgr_t	  *zonemgr;
 	dns_viewlist_t	   viewlist;
 	dns_kasplist_t	   kasplist;
+	dns_keystorelist_t keystorelist;
 	ns_interfacemgr_t *interfacemgr;
 	dns_db_t	  *in_roothints;
 
@@ -156,6 +157,13 @@ named_server_reloadcommand(named_server_t *server, isc_lex_t *lex,
  */
 
 isc_result_t
+named_server_resetstatscommand(named_server_t *server, isc_lex_t *lex,
+			       isc_buffer_t **text);
+/*%<
+ * Act on a "reset-stats" command from the command channel.
+ */
+
+isc_result_t
 named_server_reconfigcommand(named_server_t *server);
 /*%<
  * Act on a "reconfig" command from the command channel.
@@ -183,10 +191,20 @@ named_server_retransfercommand(named_server_t *server, isc_lex_t *lex,
  */
 
 isc_result_t
-named_server_togglequerylog(named_server_t *server, isc_lex_t *lex);
+named_server_setortoggle(named_server_t *server, const char *optname,
+			 unsigned int option, isc_lex_t *lex);
 /*%<
- * Enable/disable logging of queries.  (Takes "yes" or "no" argument,
- * but can also be used as a toggle for backward comptibility.)
+ * Enable/disable, or toggle, a server option via the command channel.
+ * 'option' is the option value to be changed (for example,
+ * NS_SERVER_LOGQUERIES or NS_SERVER_LOGRESPOSNES) and 'optname' is the
+ * option's human-readable name for logging purposes ("query logging"
+ * or "response logging").
+ *
+ * If an explicit argument to enable the option was provided
+ * (i.e., "on", "enable", "true", or "yes") or an explicit argument
+ * to disable it ("off", "disable", "false", or "no"), it will be used.
+ *
+ * If no argument is provided, the option's current state will be reversed.
  */
 
 /*%
@@ -374,3 +392,21 @@ named_server_servestale(named_server_t *server, isc_lex_t *lex,
 isc_result_t
 named_server_fetchlimit(named_server_t *server, isc_lex_t *lex,
 			isc_buffer_t **text);
+
+/*%
+ * Import SKR file for offline KSK signing.
+ */
+isc_result_t
+named_server_skr(named_server_t *server, isc_lex_t *lex, isc_buffer_t **text);
+
+/*%
+ * Toggle memory profiling if supported.
+ */
+isc_result_t
+named_server_togglememprof(isc_lex_t *lex);
+
+/*%
+ * Get status of memory profiling.
+ */
+const char *
+named_server_getmemprof(void);

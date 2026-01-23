@@ -9,10 +9,23 @@
 # See the COPYRIGHT file distributed with this work for additional
 # information regarding copyright ownership.
 
-import pytest_custom_markers
+import pytest
+
+# isctest.asyncserver requires dnspython >= 2.0.0
+pytest.importorskip("dns", minversion="2.0.0")
+
+pytestmark = pytest.mark.extra_artifacts(
+    [
+        "dig.out.*",
+        "named.run.*",
+        "query*.log",
+        "ans*/ans.run",
+        "ans*/query.log*",
+    ]
+)
 
 
 # The qmin test is inherently unstable, see GL #904 for details.
-@pytest_custom_markers.flaky(max_runs=3)
+@pytest.mark.flaky(max_runs=3)
 def test_qmin(run_tests_sh):
     run_tests_sh()

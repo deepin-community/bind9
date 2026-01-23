@@ -549,9 +549,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
 HAS_PYYAML=0
-if [ -x "$PYTHON" ]; then
-  $PYTHON -c "import yaml" 2>/dev/null && HAS_PYYAML=1
-fi
+$PYTHON -c "import yaml" 2>/dev/null && HAS_PYYAML=1
 
 if [ $HAS_PYYAML -ne 0 ]; then
   echo_i "checking dnstap-read YAML output"
@@ -573,7 +571,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status + ret))
 
 if [ -n "$FSTRM_CAPTURE" ]; then
-  $DIG $DIGOPTS @10.53.0.4 a.example >dig.out
+  $DIG $DIGOPTS @10.53.0.4 a.example >dig.out || ret=1
 
   # send an UPDATE to ns4
   $NSUPDATE <<-EOF >nsupdate.out 2>&1 && ret=1
@@ -704,7 +702,7 @@ EOF
     ret=1
   }
   $RNDCCMD -s 10.53.0.4 dnstap -reopen | sed 's/^/ns4 /' | cat_i
-  $DIG $DIGOPTS @10.53.0.4 a.example >dig.out
+  $DIG $DIGOPTS @10.53.0.4 a.example >dig.out || ret=1
 
   echo_i "checking reopened unix socket message counts"
   sleep 2

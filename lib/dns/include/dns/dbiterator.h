@@ -73,6 +73,8 @@ typedef struct dns_dbiteratormethods {
 	isc_result_t (*last)(dns_dbiterator_t *iterator DNS__DB_FLARG);
 	isc_result_t (*seek)(dns_dbiterator_t	   *iterator,
 			     const dns_name_t *name DNS__DB_FLARG);
+	isc_result_t (*seek3)(dns_dbiterator_t	    *iterator,
+			      const dns_name_t *name DNS__DB_FLARG);
 	isc_result_t (*prev)(dns_dbiterator_t *iterator DNS__DB_FLARG);
 	isc_result_t (*next)(dns_dbiterator_t *iterator DNS__DB_FLARG);
 	isc_result_t (*current)(dns_dbiterator_t *iterator,
@@ -176,6 +178,30 @@ dns__dbiterator_seek(dns_dbiterator_t	   *iterator,
  *\li	Other results are possible, depending on the DB implementation.
  */
 
+#define dns_dbiterator_seek3(iterator, name) \
+	dns__dbiterator_seek3(iterator, name DNS__DB_FILELINE)
+isc_result_t
+dns__dbiterator_seek3(dns_dbiterator_t	    *iterator,
+		      const dns_name_t *name DNS__DB_FLARG);
+/*%<
+ * Move the node cursor to the node with NSEC3 name 'name'.
+ * If not found, the iterator is set to the next name.
+ *
+ * Requires:
+ *\li	'iterator' is a valid iterator.
+ *
+ *\li	'name' is a valid name.
+ *
+ * Returns:
+ *\li	#ISC_R_SUCCESS
+ *\li	#ISC_R_NOTFOUND
+ *\li	#ISC_R_NOMORE		There are no NSEC3 nodes in the database.
+ *\li	#ISC_R_NOTIMPLEMENTED
+ *	(this function is only implemented for NSEC3 only iterators)
+ *
+ *\li	Other results are possible, depending on the DB implementation.
+ */
+
 #define dns_dbiterator_prev(iterator) \
 	dns__dbiterator_prev(iterator DNS__DB_FILELINE)
 isc_result_t
@@ -236,12 +262,11 @@ dns__dbiterator_current(dns_dbiterator_t *iterator, dns_dbnode_t **nodep,
  * Returns:
  *
  *\li	#ISC_R_SUCCESS
- *\li	#DNS_R_NEWORIGIN			If this iterator was created
- * with 'relative_names' set to true, then #DNS_R_NEWORIGIN will be returned
- *when
- * the origin the names are relative to changes.  This result can occur only
- *when
- *'name' is not NULL.  This is also a successful result.
+ *\li	#DNS_R_NEWORIGIN
+ *      If this iterator was created with 'relative_names' set to true,
+ *      then #DNS_R_NEWORIGIN will be returned when there is a change in
+ *      origin to which the names are relative.  This result can occur only
+ *      when 'name' is not NULL.  This is also a successful result.
  *
  *\li	Other results are possible, depending on the DB implementation.
  */

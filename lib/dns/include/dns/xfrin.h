@@ -51,25 +51,19 @@ typedef struct dns_xfrin dns_xfrin_t;
 
 ISC_LANG_BEGINDECLS
 
-isc_result_t
+void
 dns_xfrin_create(dns_zone_t *zone, dns_rdatatype_t xfrtype,
 		 const isc_sockaddr_t *primaryaddr,
 		 const isc_sockaddr_t *sourceaddr, dns_tsigkey_t *tsigkey,
 		 dns_transport_type_t soa_transport_type,
 		 dns_transport_t *transport, isc_tlsctx_cache_t *tlsctx_cache,
-		 isc_mem_t *mctx, dns_xfrindone_t done, dns_xfrin_t **xfrp);
+		 isc_mem_t *mctx, dns_xfrin_t **xfrp);
 /*%<
- * Attempt to start an incoming zone transfer of 'zone'
- * from 'primaryaddr', creating a dns_xfrin_t object to
- * manage it.  Attach '*xfrp' to the newly created object.
- *
- * Iff ISC_R_SUCCESS is returned, '*done' is called with
- * 'zone' and a result code as arguments when the transfer finishes.
+ * Create an incoming zone transfer object of 'zone' from
+ * 'primaryaddr'.  Attach '*xfrp' to the newly created object.
  *
  * Requires:
  *\li	'xfrp' != NULL and '*xfrp' == NULL.
- *
- *\li	'done' != NULL.
  *
  *\li	'primaryaddr' has a non-zero port number.
  *
@@ -88,6 +82,22 @@ dns_xfrin_create(dns_zone_t *zone, dns_rdatatype_t xfrtype,
  *	preceding SOA request. Otherwise, it should indicate the
  *	transport type used for the SOA request performed by the
  *	caller itself.
+ */
+
+isc_result_t
+dns_xfrin_start(dns_xfrin_t *xfr, dns_xfrindone_t done);
+/*%<
+ * Attempt to start an incoming zone transfer of 'xfr->zone'
+ * using the previously created '*xfr' object.
+ *
+ * Iff ISC_R_SUCCESS is returned, '*done' is called with
+ * 'zone' and a result code as arguments when the transfer finishes.
+ *
+ * Requires:
+ *\li	'xfr' is a valid dns_xfrin_t object and is associated with a zone.
+ *
+ *\li	'done' != NULL.
+ *
  */
 
 isc_time_t
@@ -133,10 +143,13 @@ dns_xfrin_getendserial(dns_xfrin_t *xfr);
 
 void
 dns_xfrin_getstats(dns_xfrin_t *xfr, unsigned int *nmsgp, unsigned int *nrecsp,
-		   uint64_t *nbytesp);
+		   uint64_t *nbytesp, uint64_t *ratep);
 /*%<
  * Get various statistics values of the xfrin object: number of the received
- * messages, number of the received records, number of the received bytes.
+ * messages, number of the received records, number of the received bytes,
+ * and the average transfer rate (in bytes-per-second) during the last full
+ * 'min-transfer-rate-in <bytes> <minutes>' minutes interval. If no such
+ * interval has passed yet, then the overall average rate is reported instead.
  *
  * Requires:
  *\li	'xfr' is a valid dns_xfrin_t.

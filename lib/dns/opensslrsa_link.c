@@ -37,10 +37,10 @@
 #include "dst_parse.h"
 #include "openssl_shim.h"
 
-#define DST_RET(a)        \
-	{                 \
-		ret = a;  \
-		goto err; \
+#define DST_RET(a)            \
+	{                     \
+		result = a;   \
+		goto cleanup; \
 	}
 
 typedef struct rsa_components {
@@ -59,7 +59,7 @@ opensslrsa_components_get(const dst_key_t *key, rsa_components_t *c,
 	EVP_PKEY *priv = key->keydata.pkeypair.priv;
 
 	if (private && priv == NULL) {
-		return (DST_R_INVALIDPRIVATEKEY);
+		return DST_R_INVALIDPRIVATEKEY;
 	}
 	/*
 	 * NOTE: Errors regarding private compoments are ignored.
@@ -79,10 +79,10 @@ opensslrsa_components_get(const dst_key_t *key, rsa_components_t *c,
 		if (EVP_PKEY_get_bn_param(pub, OSSL_PKEY_PARAM_RSA_N,
 					  (BIGNUM **)&c->n) != 1)
 		{
-			return (dst__openssl_toresult(DST_R_OPENSSLFAILURE));
+			return dst__openssl_toresult(DST_R_OPENSSLFAILURE);
 		}
 		if (!private) {
-			return (ISC_R_SUCCESS);
+			return ISC_R_SUCCESS;
 		}
 		(void)EVP_PKEY_get_bn_param(priv, OSSL_PKEY_PARAM_RSA_D,
 					    (BIGNUM **)&c->d);
@@ -98,7 +98,7 @@ opensslrsa_components_get(const dst_key_t *key, rsa_components_t *c,
 					    OSSL_PKEY_PARAM_RSA_COEFFICIENT1,
 					    (BIGNUM **)&c->iqmp);
 		ERR_clear_error();
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	} else {
 		ERR_clear_error();
 	}
@@ -106,24 +106,24 @@ opensslrsa_components_get(const dst_key_t *key, rsa_components_t *c,
 #if OPENSSL_VERSION_NUMBER < 0x30000000L || OPENSSL_API_LEVEL < 30000
 	const RSA *rsa = EVP_PKEY_get0_RSA(pub);
 	if (rsa == NULL) {
-		return (dst__openssl_toresult(DST_R_OPENSSLFAILURE));
+		return dst__openssl_toresult(DST_R_OPENSSLFAILURE);
 	}
 	RSA_get0_key(rsa, &c->n, &c->e, &c->d);
 	if (c->e == NULL || c->n == NULL) {
-		return (dst__openssl_toresult(DST_R_OPENSSLFAILURE));
+		return dst__openssl_toresult(DST_R_OPENSSLFAILURE);
 	}
 	if (!private) {
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	}
 	rsa = EVP_PKEY_get0_RSA(priv);
 	if (rsa == NULL) {
-		return (dst__openssl_toresult(DST_R_OPENSSLFAILURE));
+		return dst__openssl_toresult(DST_R_OPENSSLFAILURE);
 	}
 	RSA_get0_factors(rsa, &c->p, &c->q);
 	RSA_get0_crt_params(rsa, &c->dmp1, &c->dmq1, &c->iqmp);
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 #else
-	return (DST_R_OPENSSLFAILURE);
+	return DST_R_OPENSSLFAILURE;
 #endif
 }
 
@@ -156,9 +156,9 @@ opensslrsa_valid_key_alg(unsigned int key_alg) {
 	case DST_ALG_NSEC3RSASHA1:
 	case DST_ALG_RSASHA256:
 	case DST_ALG_RSASHA512:
-		return (true);
+		return true;
 	default:
-		return (false);
+		return false;
 	}
 }
 
@@ -179,19 +179,19 @@ opensslrsa_createctx(dst_key_t *key, dst_context_t *dctx) {
 	case DST_ALG_NSEC3RSASHA1:
 		/* From RFC 3110 */
 		if (dctx->key->key_size > 4096) {
-			return (ISC_R_FAILURE);
+			return ISC_R_FAILURE;
 		}
 		break;
 	case DST_ALG_RSASHA256:
 		/* From RFC 5702 */
 		if (dctx->key->key_size < 512 || dctx->key->key_size > 4096) {
-			return (ISC_R_FAILURE);
+			return ISC_R_FAILURE;
 		}
 		break;
 	case DST_ALG_RSASHA512:
 		/* From RFC 5702 */
 		if (dctx->key->key_size < 1024 || dctx->key->key_size > 4096) {
-			return (ISC_R_FAILURE);
+			return ISC_R_FAILURE;
 		}
 		break;
 	default:
@@ -200,7 +200,7 @@ opensslrsa_createctx(dst_key_t *key, dst_context_t *dctx) {
 
 	evp_md_ctx = EVP_MD_CTX_create();
 	if (evp_md_ctx == NULL) {
-		return (dst__openssl_toresult(ISC_R_NOMEMORY));
+		return dst__openssl_toresult(ISC_R_NOMEMORY);
 	}
 
 	switch (dctx->key->key_alg) {
@@ -220,12 +220,12 @@ opensslrsa_createctx(dst_key_t *key, dst_context_t *dctx) {
 
 	if (!EVP_DigestInit_ex(evp_md_ctx, type, NULL)) {
 		EVP_MD_CTX_destroy(evp_md_ctx);
-		return (dst__openssl_toresult3(
-			dctx->category, "EVP_DigestInit_ex", ISC_R_FAILURE));
+		return dst__openssl_toresult3(
+			dctx->category, "EVP_DigestInit_ex", ISC_R_FAILURE);
 	}
 	dctx->ctxdata.evp_md_ctx = evp_md_ctx;
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static void
@@ -253,10 +253,10 @@ opensslrsa_adddata(dst_context_t *dctx, const isc_region_t *data) {
 	evp_md_ctx = dctx->ctxdata.evp_md_ctx;
 
 	if (!EVP_DigestUpdate(evp_md_ctx, data->base, data->length)) {
-		return (dst__openssl_toresult3(
-			dctx->category, "EVP_DigestUpdate", ISC_R_FAILURE));
+		return dst__openssl_toresult3(
+			dctx->category, "EVP_DigestUpdate", ISC_R_FAILURE);
 	}
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static isc_result_t
@@ -277,17 +277,17 @@ opensslrsa_sign(dst_context_t *dctx, isc_buffer_t *sig) {
 	isc_buffer_availableregion(sig, &r);
 
 	if (r.length < (unsigned int)EVP_PKEY_size(pkey)) {
-		return (ISC_R_NOSPACE);
+		return ISC_R_NOSPACE;
 	}
 
 	if (!EVP_SignFinal(evp_md_ctx, r.base, &siglen, pkey)) {
-		return (dst__openssl_toresult3(dctx->category, "EVP_SignFinal",
-					       ISC_R_FAILURE));
+		return dst__openssl_toresult3(dctx->category, "EVP_SignFinal",
+					      ISC_R_FAILURE);
 	}
 
 	isc_buffer_add(sig, siglen);
 
-	return (ISC_R_SUCCESS);
+	return ISC_R_SUCCESS;
 }
 
 static bool
@@ -298,7 +298,7 @@ opensslrsa_check_exponent_bits(EVP_PKEY *pkey, int maxbits) {
 	if (EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_E, &e) == 1) {
 		int bits = BN_num_bits(e);
 		BN_free(e);
-		return (bits < maxbits);
+		return bits < maxbits;
 	}
 #endif
 	/* Use old API for the OpenSSL ENGINE support, even with OpenSSL 3.x */
@@ -308,11 +308,11 @@ opensslrsa_check_exponent_bits(EVP_PKEY *pkey, int maxbits) {
 		const BIGNUM *ce = NULL;
 		RSA_get0_key(rsa, NULL, &ce, NULL);
 		if (ce != NULL) {
-			return (BN_num_bits(ce) < maxbits);
+			return BN_num_bits(ce) < maxbits;
 		}
 	}
 #endif
-	return (false);
+	return false;
 }
 
 static isc_result_t
@@ -330,25 +330,24 @@ opensslrsa_verify2(dst_context_t *dctx, int maxbits, const isc_region_t *sig) {
 	pkey = key->keydata.pkeypair.pub;
 
 	if (maxbits != 0 && !opensslrsa_check_exponent_bits(pkey, maxbits)) {
-		return (DST_R_VERIFYFAILURE);
+		return DST_R_VERIFYFAILURE;
 	}
 
 	status = EVP_VerifyFinal(evp_md_ctx, sig->base, sig->length, pkey);
 	switch (status) {
 	case 1:
-		return (ISC_R_SUCCESS);
+		return ISC_R_SUCCESS;
 	case 0:
-		return (dst__openssl_toresult(DST_R_VERIFYFAILURE));
+		return dst__openssl_toresult(DST_R_VERIFYFAILURE);
 	default:
-		return (dst__openssl_toresult3(dctx->category,
-					       "EVP_VerifyFinal",
-					       DST_R_VERIFYFAILURE));
+		return dst__openssl_toresult3(dctx->category, "EVP_VerifyFinal",
+					      DST_R_VERIFYFAILURE);
 	}
 }
 
 static isc_result_t
 opensslrsa_verify(dst_context_t *dctx, const isc_region_t *sig) {
-	return (opensslrsa_verify2(dctx, 0, sig));
+	return opensslrsa_verify2(dctx, 0, sig);
 }
 
 #if OPENSSL_VERSION_NUMBER < 0x30000000L || OPENSSL_API_LEVEL < 30000
@@ -362,17 +361,21 @@ progress_cb(int p, int n, BN_GENCB *cb) {
 	if (fptr != NULL) {
 		fptr(p);
 	}
-	return (1);
+	return 1;
 }
 
 static isc_result_t
-opensslrsa_generate_pkey(unsigned int key_size, BIGNUM *e,
+opensslrsa_generate_pkey(unsigned int key_size, const char *label, BIGNUM *e,
 			 void (*callback)(int), EVP_PKEY **retkey) {
-	RSA *rsa = RSA_new();
-	EVP_PKEY *pkey = EVP_PKEY_new();
+	RSA *rsa = NULL;
+	EVP_PKEY *pkey = NULL;
 	BN_GENCB *cb = NULL;
-	isc_result_t ret;
+	isc_result_t result;
 
+	UNUSED(label);
+
+	rsa = RSA_new();
+	pkey = EVP_PKEY_new();
 	if (rsa == NULL || pkey == NULL) {
 		DST_RET(dst__openssl_toresult(DST_R_OPENSSLFAILURE));
 	}
@@ -395,18 +398,18 @@ opensslrsa_generate_pkey(unsigned int key_size, BIGNUM *e,
 	}
 	*retkey = pkey;
 	pkey = NULL;
-	ret = ISC_R_SUCCESS;
+	result = ISC_R_SUCCESS;
 
-err:
+cleanup:
 	EVP_PKEY_free(pkey);
 	RSA_free(rsa);
 	BN_GENCB_free(cb);
-	return (ret);
+	return result;
 }
 
 static isc_result_t
 opensslrsa_build_pkey(bool private, rsa_components_t *c, EVP_PKEY **retpkey) {
-	isc_result_t ret;
+	isc_result_t result;
 	EVP_PKEY *pkey = NULL;
 	RSA *rsa = RSA_new();
 	int status;
@@ -471,13 +474,13 @@ opensslrsa_build_pkey(bool private, rsa_components_t *c, EVP_PKEY **retpkey) {
 
 	*retpkey = pkey;
 	pkey = NULL;
-	ret = ISC_R_SUCCESS;
+	result = ISC_R_SUCCESS;
 
-err:
+cleanup:
 	EVP_PKEY_free(pkey);
 	RSA_free(rsa);
 	opensslrsa_components_free(c);
-	return (ret);
+	return result;
 }
 #else
 static int
@@ -489,15 +492,66 @@ progress_cb(EVP_PKEY_CTX *ctx) {
 		int p = EVP_PKEY_CTX_get_keygen_info(ctx, 0);
 		fptr(p);
 	}
-	return (1);
+	return 1;
 }
 
 static isc_result_t
-opensslrsa_generate_pkey(unsigned int key_size, BIGNUM *e,
-			 void (*callback)(int), EVP_PKEY **retkey) {
-	EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL);
-	isc_result_t ret;
+opensslrsa_generate_pkey_with_uri(size_t key_size, const char *label,
+				  EVP_PKEY **retkey) {
+	EVP_PKEY_CTX *ctx = NULL;
+	OSSL_PARAM params[4];
+	char *uri = UNCONST(label);
+	isc_result_t result;
+	int status;
 
+	params[0] = OSSL_PARAM_construct_utf8_string("pkcs11_uri", uri, 0);
+	params[1] = OSSL_PARAM_construct_utf8_string(
+		"pkcs11_key_usage", (char *)"digitalSignature", 0);
+	params[2] = OSSL_PARAM_construct_size_t("rsa_keygen_bits", &key_size);
+	params[3] = OSSL_PARAM_construct_end();
+
+	ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", "provider=pkcs11");
+	if (ctx == NULL) {
+		DST_RET(dst__openssl_toresult2("EVP_PKEY_CTX_new_from_name",
+					       DST_R_OPENSSLFAILURE));
+	}
+
+	status = EVP_PKEY_keygen_init(ctx);
+	if (status != 1) {
+		DST_RET(dst__openssl_toresult2("EVP_PKEY_keygen_init",
+					       DST_R_OPENSSLFAILURE));
+	}
+
+	status = EVP_PKEY_CTX_set_params(ctx, params);
+	if (status != 1) {
+		DST_RET(dst__openssl_toresult2("EVP_PKEY_CTX_set_params",
+					       DST_R_OPENSSLFAILURE));
+	}
+
+	status = EVP_PKEY_generate(ctx, retkey);
+	if (status != 1) {
+		DST_RET(dst__openssl_toresult2("EVP_PKEY_generate",
+					       DST_R_OPENSSLFAILURE));
+	}
+
+	result = ISC_R_SUCCESS;
+cleanup:
+	EVP_PKEY_CTX_free(ctx);
+	return result;
+}
+
+static isc_result_t
+opensslrsa_generate_pkey(unsigned int key_size, const char *label, BIGNUM *e,
+			 void (*callback)(int), EVP_PKEY **retkey) {
+	EVP_PKEY_CTX *ctx;
+	isc_result_t result;
+
+	if (label != NULL) {
+		return opensslrsa_generate_pkey_with_uri(key_size, label,
+							 retkey);
+	}
+
+	ctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL);
 	if (ctx == NULL) {
 		DST_RET(dst__openssl_toresult(DST_R_OPENSSLFAILURE));
 	}
@@ -523,15 +577,15 @@ opensslrsa_generate_pkey(unsigned int key_size, BIGNUM *e,
 		DST_RET(dst__openssl_toresult2("EVP_PKEY_keygen",
 					       DST_R_OPENSSLFAILURE));
 	}
-	ret = ISC_R_SUCCESS;
-err:
+	result = ISC_R_SUCCESS;
+cleanup:
 	EVP_PKEY_CTX_free(ctx);
-	return (ret);
+	return result;
 }
 
 static isc_result_t
 opensslrsa_build_pkey(bool private, rsa_components_t *c, EVP_PKEY **retpkey) {
-	isc_result_t ret;
+	isc_result_t result;
 	int status;
 	OSSL_PARAM_BLD *bld = NULL;
 	OSSL_PARAM *params = NULL;
@@ -612,19 +666,19 @@ opensslrsa_build_pkey(bool private, rsa_components_t *c, EVP_PKEY **retpkey) {
 		DST_RET(dst__openssl_toresult2("EVP_PKEY_fromdata",
 					       DST_R_OPENSSLFAILURE));
 	}
-	ret = ISC_R_SUCCESS;
+	result = ISC_R_SUCCESS;
 
-err:
+cleanup:
 	EVP_PKEY_CTX_free(ctx);
 	OSSL_PARAM_free(params);
 	OSSL_PARAM_BLD_free(bld);
-	return (ret);
+	return result;
 }
 #endif /* OPENSSL_VERSION_NUMBER < 0x30000000L || OPENSSL_API_LEVEL < 30000 */
 
 static isc_result_t
 opensslrsa_generate(dst_key_t *key, int exp, void (*callback)(int)) {
-	isc_result_t ret;
+	isc_result_t result;
 	BIGNUM *e = BN_new();
 	EVP_PKEY *pkey = NULL;
 
@@ -669,20 +723,18 @@ opensslrsa_generate(dst_key_t *key, int exp, void (*callback)(int)) {
 		BN_set_bit(e, 32);
 	}
 
-	ret = opensslrsa_generate_pkey(key->key_size, e, callback, &pkey);
-	if (ret != ISC_R_SUCCESS) {
-		goto err;
-	}
+	CHECK(opensslrsa_generate_pkey(key->key_size, key->label, e, callback,
+				       &pkey));
 
 	key->keydata.pkeypair.pub = pkey;
 	key->keydata.pkeypair.priv = pkey;
 	pkey = NULL;
-	ret = ISC_R_SUCCESS;
+	result = ISC_R_SUCCESS;
 
-err:
+cleanup:
 	EVP_PKEY_free(pkey);
 	BN_free(e);
-	return (ret);
+	return result;
 }
 
 static isc_result_t
@@ -690,17 +742,14 @@ opensslrsa_todns(const dst_key_t *key, isc_buffer_t *data) {
 	isc_region_t r;
 	unsigned int e_bytes;
 	unsigned int mod_bytes;
-	isc_result_t ret;
+	isc_result_t result;
 	rsa_components_t c = { 0 };
 
 	REQUIRE(key->keydata.pkeypair.pub != NULL);
 
 	isc_buffer_availableregion(data, &r);
 
-	ret = opensslrsa_components_get(key, &c, false);
-	if (ret != ISC_R_SUCCESS) {
-		goto err;
-	}
+	CHECK(opensslrsa_components_get(key, &c, false));
 
 	mod_bytes = BN_num_bytes(c.n);
 	e_bytes = BN_num_bytes(c.e);
@@ -731,15 +780,15 @@ opensslrsa_todns(const dst_key_t *key, isc_buffer_t *data) {
 
 	isc_buffer_add(data, e_bytes + mod_bytes);
 
-	ret = ISC_R_SUCCESS;
-err:
+	result = ISC_R_SUCCESS;
+cleanup:
 	opensslrsa_components_free(&c);
-	return (ret);
+	return result;
 }
 
 static isc_result_t
 opensslrsa_fromdns(dst_key_t *key, isc_buffer_t *data) {
-	isc_result_t ret;
+	isc_result_t result;
 	isc_region_t r;
 	unsigned int e_bytes;
 	unsigned int length;
@@ -781,29 +830,26 @@ opensslrsa_fromdns(dst_key_t *key, isc_buffer_t *data) {
 	isc_buffer_forward(data, length);
 
 	key->key_size = BN_num_bits(c.n);
-	ret = opensslrsa_build_pkey(false, &c, &key->keydata.pkeypair.pub);
+	result = opensslrsa_build_pkey(false, &c, &key->keydata.pkeypair.pub);
 
-err:
+cleanup:
 	opensslrsa_components_free(&c);
-	return (ret);
+	return result;
 }
 
 static isc_result_t
 opensslrsa_tofile(const dst_key_t *key, const char *directory) {
-	isc_result_t ret;
+	isc_result_t result;
 	dst_private_t priv = { 0 };
 	unsigned char *bufs[8] = { NULL };
 	unsigned short i = 0;
 	rsa_components_t c = { 0 };
 
 	if (key->external) {
-		return (dst__privstruct_writefile(key, &priv, directory));
+		return dst__privstruct_writefile(key, &priv, directory);
 	}
 
-	ret = opensslrsa_components_get(key, &c, true);
-	if (ret != ISC_R_SUCCESS) {
-		goto err;
-	}
+	CHECK(opensslrsa_components_get(key, &c, true));
 
 	priv.elements[i].tag = TAG_RSA_MODULUS;
 	priv.elements[i].length = BN_num_bytes(c.n);
@@ -896,9 +942,9 @@ opensslrsa_tofile(const dst_key_t *key, const char *directory) {
 	}
 
 	priv.nelements = i;
-	ret = dst__privstruct_writefile(key, &priv, directory);
+	result = dst__privstruct_writefile(key, &priv, directory);
 
-err:
+cleanup:
 	for (i = 0; i < ARRAY_SIZE(bufs); i++) {
 		if (bufs[i] != NULL) {
 			isc_mem_put(key->mctx, bufs[i],
@@ -907,7 +953,7 @@ err:
 	}
 	opensslrsa_components_free(&c);
 
-	return (ret);
+	return result;
 }
 
 static isc_result_t
@@ -917,7 +963,7 @@ opensslrsa_fromlabel(dst_key_t *key, const char *engine, const char *label,
 static isc_result_t
 opensslrsa_parse(dst_key_t *key, isc_lex_t *lexer, dst_key_t *pub) {
 	dst_private_t priv;
-	isc_result_t ret;
+	isc_result_t result;
 	int i;
 	isc_mem_t *mctx = NULL;
 	const char *engine = NULL, *label = NULL;
@@ -930,10 +976,7 @@ opensslrsa_parse(dst_key_t *key, isc_lex_t *lexer, dst_key_t *pub) {
 	mctx = key->mctx;
 
 	/* read private key file */
-	ret = dst__privstruct_parse(key, DST_ALG_RSA, lexer, mctx, &priv);
-	if (ret != ISC_R_SUCCESS) {
-		goto err;
-	}
+	CHECK(dst__privstruct_parse(key, DST_ALG_RSA, lexer, mctx, &priv));
 
 	if (key->external) {
 		if (priv.nelements != 0 || pub == NULL) {
@@ -965,9 +1008,9 @@ opensslrsa_parse(dst_key_t *key, isc_lex_t *lexer, dst_key_t *pub) {
 	 * See if we can fetch it.
 	 */
 	if (label != NULL) {
-		ret = opensslrsa_fromlabel(key, engine, label, NULL);
-		if (ret != ISC_R_SUCCESS) {
-			DST_RET(ret);
+		result = opensslrsa_fromlabel(key, engine, label, NULL);
+		if (result != ISC_R_SUCCESS) {
+			DST_RET(result);
 		}
 		/* Check that the public component matches if given */
 		if (pub != NULL && EVP_PKEY_eq(key->keydata.pkeypair.pub,
@@ -1031,10 +1074,7 @@ opensslrsa_parse(dst_key_t *key, isc_lex_t *lexer, dst_key_t *pub) {
 	}
 
 	key->key_size = BN_num_bits(c.n);
-	ret = opensslrsa_build_pkey(true, &c, &pkey);
-	if (ret != ISC_R_SUCCESS) {
-		goto err;
-	}
+	CHECK(opensslrsa_build_pkey(true, &c, &pkey));
 
 	/* Check that the public component matches if given */
 	if (pub != NULL && EVP_PKEY_eq(pkey, pub->keydata.pkeypair.pub) != 1) {
@@ -1045,30 +1085,27 @@ opensslrsa_parse(dst_key_t *key, isc_lex_t *lexer, dst_key_t *pub) {
 	key->keydata.pkeypair.priv = pkey;
 	pkey = NULL;
 
-err:
+cleanup:
 	opensslrsa_components_free(&c);
 	EVP_PKEY_free(pkey);
-	if (ret != ISC_R_SUCCESS) {
+	if (result != ISC_R_SUCCESS) {
 		key->keydata.generic = NULL;
 	}
 
 	dst__privstruct_free(&priv, mctx);
 	isc_safe_memwipe(&priv, sizeof(priv));
 
-	return (ret);
+	return result;
 }
 
 static isc_result_t
 opensslrsa_fromlabel(dst_key_t *key, const char *engine, const char *label,
 		     const char *pin) {
 	EVP_PKEY *privpkey = NULL, *pubpkey = NULL;
-	isc_result_t ret;
+	isc_result_t result;
 
-	ret = dst__openssl_fromlabel(EVP_PKEY_RSA, engine, label, pin, &pubpkey,
-				     &privpkey);
-	if (ret != ISC_R_SUCCESS) {
-		goto err;
-	}
+	CHECK(dst__openssl_fromlabel(EVP_PKEY_RSA, engine, label, pin, &pubpkey,
+				     &privpkey));
 
 	if (!opensslrsa_check_exponent_bits(pubpkey, RSA_MAX_PUBEXP_BITS)) {
 		DST_RET(ISC_R_RANGE);
@@ -1084,10 +1121,10 @@ opensslrsa_fromlabel(dst_key_t *key, const char *engine, const char *label,
 	privpkey = NULL;
 	pubpkey = NULL;
 
-err:
+cleanup:
 	EVP_PKEY_free(privpkey);
 	EVP_PKEY_free(pubpkey);
-	return (ret);
+	return result;
 }
 
 static dst_func_t opensslrsa_functions = {
@@ -1197,7 +1234,7 @@ check_algorithm(unsigned char algorithm) {
 	EVP_PKEY *pkey = NULL;
 	const EVP_MD *type = NULL;
 	const unsigned char *sig = NULL;
-	isc_result_t ret = ISC_R_SUCCESS;
+	isc_result_t result = ISC_R_SUCCESS;
 	size_t len;
 
 	if (evp_md_ctx == NULL) {
@@ -1238,10 +1275,7 @@ check_algorithm(unsigned char algorithm) {
 		DST_RET(ISC_R_NOMEMORY);
 	}
 
-	ret = opensslrsa_build_pkey(false, &c, &pkey);
-	if (ret != ISC_R_SUCCESS) {
-		goto err;
-	}
+	CHECK(opensslrsa_build_pkey(false, &c, &pkey));
 
 	/*
 	 * Check that we can verify the signature.
@@ -1253,12 +1287,12 @@ check_algorithm(unsigned char algorithm) {
 		DST_RET(ISC_R_NOTIMPLEMENTED);
 	}
 
-err:
+cleanup:
 	opensslrsa_components_free(&c);
 	EVP_PKEY_free(pkey);
 	EVP_MD_CTX_destroy(evp_md_ctx);
 	ERR_clear_error();
-	return (ret);
+	return result;
 }
 
 isc_result_t
@@ -1277,5 +1311,5 @@ dst__opensslrsa_init(dst_func_t **funcp, unsigned char algorithm) {
 		result = ISC_R_SUCCESS;
 	}
 
-	return (result);
+	return result;
 }

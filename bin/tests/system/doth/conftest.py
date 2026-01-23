@@ -12,9 +12,9 @@
 # information regarding copyright ownership.
 
 import shutil
-import subprocess
 
 import pytest
+import isctest
 
 
 @pytest.fixture
@@ -25,13 +25,10 @@ def gnutls_cli_executable():
         pytest.skip("gnutls-cli not found in PATH")
 
     # Ensure gnutls-cli supports the --logfile command-line option.
-    output = subprocess.run(
-        [executable, "--logfile=/dev/null"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    ).stdout
-    if b"illegal option" in output:
+    cmd = isctest.run.cmd(
+        [executable, "--logfile=/dev/null"], log_stderr=False, raise_on_exception=False
+    )
+    if "illegal option" in cmd.out:
         pytest.skip("gnutls-cli does not support the --logfile option")
 
     return executable

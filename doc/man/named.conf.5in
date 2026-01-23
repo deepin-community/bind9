@@ -53,8 +53,7 @@ Unix style: # to end of line
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 acl <string> { <address_match_element>; ... }; // may occur multiple times
 
 controls {
@@ -72,14 +71,17 @@ dnssec\-policy <string> {
 	cds\-digest\-types { <string>; ... };
 	dnskey\-ttl <duration>;
 	inline\-signing <boolean>;
-	keys { ( csk | ksk | zsk ) [ ( key\-directory ) ] lifetime <duration_or_unlimited> algorithm <string> [ <integer> ]; ... };
+	keys { ( csk | ksk | zsk ) [ key\-directory | key\-store <string> ] lifetime <duration_or_unlimited> algorithm <string> [ tag\-range <integer> <integer> ] [ <integer> ]; ... };
+	manual\-mode <boolean>;
 	max\-zone\-ttl <duration>;
 	nsec3param [ iterations <integer> ] [ optout <boolean> ] [ salt\-length <integer> ];
+	offline\-ksk <boolean>;
 	parent\-ds\-ttl <duration>;
 	parent\-propagation\-delay <duration>;
 	publish\-safety <duration>;
 	purge\-keys <duration>;
 	retire\-safety <duration>;
+	signatures\-jitter <duration>;
 	signatures\-refresh <duration>;
 	signatures\-validity <duration>;
 	signatures\-validity\-dnskey <duration>;
@@ -97,6 +99,11 @@ http <string> {
 key <string> {
 	algorithm <string>;
 	secret <string>;
+}; // may occur multiple times
+
+key\-store <string> {
+	directory <string>;
+	pkcs11\-uri <quoted_string>;
 }; // may occur multiple times
 
 logging {
@@ -130,7 +137,7 @@ options {
 	allow\-transfer [ port <integer> ] [ transport <string> ] { <address_match_element>; ... };
 	allow\-update { <address_match_element>; ... };
 	allow\-update\-forwarding { <address_match_element>; ... };
-	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	answer\-cookie <boolean>;
 	attach\-cache <string>;
 	auth\-nxdomain <boolean>;
@@ -139,7 +146,7 @@ options {
 	avoid\-v6\-udp\-ports { <portrange>; ... }; // deprecated
 	bindkeys\-file <quoted_string>; // test only
 	blackhole { <address_match_element>; ... };
-	catalog\-zones { zone <string> [ default\-primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... } ] [ zone\-directory <quoted_string> ] [ in\-memory <boolean> ] [ min\-update\-interval <duration> ]; ... };
+	catalog\-zones { zone <string> [ default\-primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... } ] [ zone\-directory <quoted_string> ] [ in\-memory <boolean> ] [ min\-update\-interval <duration> ]; ... };
 	check\-dup\-records ( fail | warn | ignore );
 	check\-integrity <boolean>;
 	check\-mx ( fail | warn | ignore );
@@ -233,7 +240,10 @@ options {
 	max\-ixfr\-ratio ( unlimited | <percentage> );
 	max\-journal\-size ( default | unlimited | <sizeval> );
 	max\-ncache\-ttl <duration>;
+	max\-query\-count <integer>;
+	max\-query\-restarts <integer>;
 	max\-records <integer>;
+	max\-records\-per\-type <integer>;
 	max\-recursion\-depth <integer>;
 	max\-recursion\-queries <integer>;
 	max\-refresh\-time <integer>;
@@ -244,7 +254,10 @@ options {
 	max\-transfer\-idle\-out <integer>;
 	max\-transfer\-time\-in <integer>;
 	max\-transfer\-time\-out <integer>;
+	max\-types\-per\-name <integer>;
 	max\-udp\-size <integer>;
+	max\-validation\-failures\-per\-fetch <integer>; // experimental
+	max\-validations\-per\-fetch <integer>; // experimental
 	max\-zone\-ttl ( unlimited | <duration> ); // deprecated
 	memstatistics <boolean>;
 	memstatistics\-file <quoted_string>;
@@ -253,6 +266,7 @@ options {
 	min\-ncache\-ttl <duration>;
 	min\-refresh\-time <integer>;
 	min\-retry\-time <integer>;
+	min\-transfer\-rate\-in <integer> <integer>;
 	minimal\-any <boolean>;
 	minimal\-responses ( no\-auth | no\-auth\-recursive | <boolean> );
 	multi\-master <boolean>;
@@ -260,6 +274,7 @@ options {
 	no\-case\-compress { <address_match_element>; ... };
 	nocookie\-udp\-size <integer>;
 	notify ( explicit | master\-only | primary\-only | <boolean> );
+	notify\-defer <integer>;
 	notify\-delay <integer>;
 	notify\-rate <integer>;
 	notify\-source ( <ipv4_address> | * );
@@ -277,8 +292,8 @@ options {
 	prefetch <integer> [ <integer> ];
 	provide\-ixfr <boolean>;
 	qname\-minimization ( strict | relaxed | disabled | off );
-	query\-source [ address ] ( <ipv4_address> | * );
-	query\-source\-v6 [ address ] ( <ipv6_address> | * );
+	query\-source [ address ] ( <ipv4_address> | * | none );
+	query\-source\-v6 [ address ] ( <ipv6_address> | * | none );
 	querylog <boolean>;
 	rate\-limit {
 		all\-per\-second <integer>;
@@ -307,7 +322,8 @@ options {
 	resolver\-query\-timeout <integer>;
 	resolver\-use\-dns64 <boolean>;
 	response\-padding { <address_match_element>; ... } block\-size <integer>;
-	response\-policy { zone <string> [ add\-soa <boolean> ] [ log <boolean> ] [ max\-policy\-ttl <duration> ] [ min\-update\-interval <duration> ] [ policy ( cname | disabled | drop | given | no\-op | nodata | nxdomain | passthru | tcp\-only <quoted_string> ) ] [ recursive\-only <boolean> ] [ nsip\-enable <boolean> ] [ nsdname\-enable <boolean> ] [ ede <string> ]; ... } [ add\-soa <boolean> ] [ break\-dnssec <boolean> ] [ max\-policy\-ttl <duration> ] [ min\-update\-interval <duration> ] [ min\-ns\-dots <integer> ] [ nsip\-wait\-recurse <boolean> ] [ nsdname\-wait\-recurse <boolean> ] [ qname\-wait\-recurse <boolean> ] [ recursive\-only <boolean> ] [ nsip\-enable <boolean> ] [ nsdname\-enable <boolean> ] [ dnsrps\-enable <boolean> ] [ dnsrps\-options { <unspecified\-text> } ];
+	response\-policy { zone <string> [ add\-soa <boolean> ] [ log <boolean> ] [ max\-policy\-ttl <duration> ] [ min\-update\-interval <duration> ] [ policy ( cname | disabled | drop | given | no\-op | nodata | nxdomain | passthru | tcp\-only <quoted_string> ) ] [ recursive\-only <boolean> ] [ nsip\-enable <boolean> ] [ nsdname\-enable <boolean> ] [ ede <string> ]; ... } [ add\-soa <boolean> ] [ break\-dnssec <boolean> ] [ max\-policy\-ttl <duration> ] [ min\-update\-interval <duration> ] [ min\-ns\-dots <integer> ] [ nsip\-wait\-recurse <boolean> ] [ nsdname\-wait\-recurse <boolean> ] [ qname\-wait\-recurse <boolean> ] [ recursive\-only <boolean> ] [ servfail\-until\-ready <boolean> ] [ nsip\-enable <boolean> ] [ nsdname\-enable <boolean> ] [ dnsrps\-enable <boolean> ] [ dnsrps\-options { <unspecified\-text> } ];
+	responselog <boolean>;
 	reuseport <boolean>;
 	root\-key\-sentinel <boolean>;
 	rrset\-order { [ class <string> ] [ type <string> ] [ name <quoted_string> ] <string> <string>; ... };
@@ -324,7 +340,11 @@ options {
 	sig\-signing\-signatures <integer>;
 	sig\-signing\-type <integer>;
 	sig\-validity\-interval <integer> [ <integer> ]; // obsolete
-	sortlist { <address_match_element>; ... };
+	sig0checks\-quota <integer>; // experimental
+	sig0checks\-quota\-exempt { <address_match_element>; ... }; // experimental
+	sig0key\-checks\-limit <integer>;
+	sig0message\-checks\-limit <integer>;
+	sortlist { <address_match_element>; ... }; // deprecated
 	stale\-answer\-client\-timeout ( disabled | off | <integer> );
 	stale\-answer\-enable <boolean>;
 	stale\-answer\-ttl <duration>;
@@ -341,8 +361,8 @@ options {
 	tcp\-listen\-queue <integer>;
 	tcp\-receive\-buffer <integer>;
 	tcp\-send\-buffer <integer>;
-	tkey\-domain <quoted_string>;
-	tkey\-gssapi\-credential <quoted_string>;
+	tkey\-domain <quoted_string>; // obsolete
+	tkey\-gssapi\-credential <quoted_string>; // deprecated
 	tkey\-gssapi\-keytab <quoted_string>;
 	tls\-port <integer>;
 	transfer\-format ( many\-answers | one\-answer );
@@ -352,7 +372,7 @@ options {
 	transfers\-in <integer>;
 	transfers\-out <integer>;
 	transfers\-per\-ns <integer>;
-	trust\-anchor\-telemetry <boolean>; // experimental
+	trust\-anchor\-telemetry <boolean>;
 	try\-tcp\-refresh <boolean>;
 	udp\-receive\-buffer <integer>;
 	udp\-send\-buffer <integer>;
@@ -368,11 +388,9 @@ options {
 	zone\-statistics ( full | terse | none | <boolean> );
 };
 
-parental\-agents <string> [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... }; // may occur multiple times
-
 plugin ( query ) <string> [ { <unspecified\-text> } ]; // may occur multiple times
 
-primaries <string> [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... }; // may occur multiple times
+remote\-servers <string> [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... }; // may occur multiple times
 
 server <netprefix> {
 	bogus <boolean>;
@@ -407,6 +425,7 @@ statistics\-channels {
 tls <string> {
 	ca\-file <quoted_string>;
 	cert\-file <quoted_string>;
+	cipher\-suites <string>;
 	ciphers <string>;
 	dhparam\-file <quoted_string>;
 	key\-file <quoted_string>;
@@ -434,10 +453,10 @@ view <string> [ <class> ] {
 	allow\-transfer [ port <integer> ] [ transport <string> ] { <address_match_element>; ... };
 	allow\-update { <address_match_element>; ... };
 	allow\-update\-forwarding { <address_match_element>; ... };
-	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	attach\-cache <string>;
 	auth\-nxdomain <boolean>;
-	catalog\-zones { zone <string> [ default\-primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... } ] [ zone\-directory <quoted_string> ] [ in\-memory <boolean> ] [ min\-update\-interval <duration> ]; ... };
+	catalog\-zones { zone <string> [ default\-primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... } ] [ zone\-directory <quoted_string> ] [ in\-memory <boolean> ] [ min\-update\-interval <duration> ]; ... };
 	check\-dup\-records ( fail | warn | ignore );
 	check\-integrity <boolean>;
 	check\-mx ( fail | warn | ignore );
@@ -515,7 +534,10 @@ view <string> [ <class> ] {
 	max\-ixfr\-ratio ( unlimited | <percentage> );
 	max\-journal\-size ( default | unlimited | <sizeval> );
 	max\-ncache\-ttl <duration>;
+	max\-query\-count <integer>;
+	max\-query\-restarts <integer>;
 	max\-records <integer>;
+	max\-records\-per\-type <integer>;
 	max\-recursion\-depth <integer>;
 	max\-recursion\-queries <integer>;
 	max\-refresh\-time <integer>;
@@ -525,13 +547,17 @@ view <string> [ <class> ] {
 	max\-transfer\-idle\-out <integer>;
 	max\-transfer\-time\-in <integer>;
 	max\-transfer\-time\-out <integer>;
+	max\-types\-per\-name <integer>;
 	max\-udp\-size <integer>;
+	max\-validation\-failures\-per\-fetch <integer>; // experimental
+	max\-validations\-per\-fetch <integer>; // experimental
 	max\-zone\-ttl ( unlimited | <duration> ); // deprecated
 	message\-compression <boolean>;
 	min\-cache\-ttl <duration>;
 	min\-ncache\-ttl <duration>;
 	min\-refresh\-time <integer>;
 	min\-retry\-time <integer>;
+	min\-transfer\-rate\-in <integer> <integer>;
 	minimal\-any <boolean>;
 	minimal\-responses ( no\-auth | no\-auth\-recursive | <boolean> );
 	multi\-master <boolean>;
@@ -539,6 +565,7 @@ view <string> [ <class> ] {
 	no\-case\-compress { <address_match_element>; ... };
 	nocookie\-udp\-size <integer>;
 	notify ( explicit | master\-only | primary\-only | <boolean> );
+	notify\-defer <integer>;
 	notify\-delay <integer>;
 	notify\-source ( <ipv4_address> | * );
 	notify\-source\-v6 ( <ipv6_address> | * );
@@ -554,8 +581,8 @@ view <string> [ <class> ] {
 	prefetch <integer> [ <integer> ];
 	provide\-ixfr <boolean>;
 	qname\-minimization ( strict | relaxed | disabled | off );
-	query\-source [ address ] ( <ipv4_address> | * );
-	query\-source\-v6 [ address ] ( <ipv6_address> | * );
+	query\-source [ address ] ( <ipv4_address> | * | none );
+	query\-source\-v6 [ address ] ( <ipv6_address> | * | none );
 	rate\-limit {
 		all\-per\-second <integer>;
 		errors\-per\-second <integer>;
@@ -581,7 +608,7 @@ view <string> [ <class> ] {
 	resolver\-query\-timeout <integer>;
 	resolver\-use\-dns64 <boolean>;
 	response\-padding { <address_match_element>; ... } block\-size <integer>;
-	response\-policy { zone <string> [ add\-soa <boolean> ] [ log <boolean> ] [ max\-policy\-ttl <duration> ] [ min\-update\-interval <duration> ] [ policy ( cname | disabled | drop | given | no\-op | nodata | nxdomain | passthru | tcp\-only <quoted_string> ) ] [ recursive\-only <boolean> ] [ nsip\-enable <boolean> ] [ nsdname\-enable <boolean> ] [ ede <string> ]; ... } [ add\-soa <boolean> ] [ break\-dnssec <boolean> ] [ max\-policy\-ttl <duration> ] [ min\-update\-interval <duration> ] [ min\-ns\-dots <integer> ] [ nsip\-wait\-recurse <boolean> ] [ nsdname\-wait\-recurse <boolean> ] [ qname\-wait\-recurse <boolean> ] [ recursive\-only <boolean> ] [ nsip\-enable <boolean> ] [ nsdname\-enable <boolean> ] [ dnsrps\-enable <boolean> ] [ dnsrps\-options { <unspecified\-text> } ];
+	response\-policy { zone <string> [ add\-soa <boolean> ] [ log <boolean> ] [ max\-policy\-ttl <duration> ] [ min\-update\-interval <duration> ] [ policy ( cname | disabled | drop | given | no\-op | nodata | nxdomain | passthru | tcp\-only <quoted_string> ) ] [ recursive\-only <boolean> ] [ nsip\-enable <boolean> ] [ nsdname\-enable <boolean> ] [ ede <string> ]; ... } [ add\-soa <boolean> ] [ break\-dnssec <boolean> ] [ max\-policy\-ttl <duration> ] [ min\-update\-interval <duration> ] [ min\-ns\-dots <integer> ] [ nsip\-wait\-recurse <boolean> ] [ nsdname\-wait\-recurse <boolean> ] [ qname\-wait\-recurse <boolean> ] [ recursive\-only <boolean> ] [ servfail\-until\-ready <boolean> ] [ nsip\-enable <boolean> ] [ nsdname\-enable <boolean> ] [ dnsrps\-enable <boolean> ] [ dnsrps\-options { <unspecified\-text> } ];
 	root\-key\-sentinel <boolean>;
 	rrset\-order { [ class <string> ] [ type <string> ] [ name <quoted_string> ] <string> <string>; ... };
 	send\-cookie <boolean>;
@@ -616,7 +643,9 @@ view <string> [ <class> ] {
 	sig\-signing\-signatures <integer>;
 	sig\-signing\-type <integer>;
 	sig\-validity\-interval <integer> [ <integer> ]; // obsolete
-	sortlist { <address_match_element>; ... };
+	sig0key\-checks\-limit <integer>;
+	sig0message\-checks\-limit <integer>;
+	sortlist { <address_match_element>; ... }; // deprecated
 	stale\-answer\-client\-timeout ( disabled | off | <integer> );
 	stale\-answer\-enable <boolean>;
 	stale\-answer\-ttl <duration>;
@@ -626,7 +655,7 @@ view <string> [ <class> ] {
 	transfer\-format ( many\-answers | one\-answer );
 	transfer\-source ( <ipv4_address> | * );
 	transfer\-source\-v6 ( <ipv6_address> | * );
-	trust\-anchor\-telemetry <boolean>; // experimental
+	trust\-anchor\-telemetry <boolean>;
 	trust\-anchors { <string> ( static\-key | initial\-key | static\-ds | initial\-ds ) <integer> <integer> <integer> <quoted_string>; ... }; // may occur multiple times
 	trusted\-keys { <string> <integer> <integer> <integer> <quoted_string>; ... }; // may occur multiple times, deprecated
 	try\-tcp\-refresh <boolean>;
@@ -639,8 +668,7 @@ view <string> [ <class> ] {
 }; // may occur multiple times
 
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -648,15 +676,14 @@ Any of these zone statements can also be set inside the view statement.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	type primary;
 	allow\-query { <address_match_element>; ... };
 	allow\-query\-on { <address_match_element>; ... };
 	allow\-transfer [ port <integer> ] [ transport <string> ] { <address_match_element>; ... };
 	allow\-update { <address_match_element>; ... };
-	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	check\-dup\-records ( fail | warn | ignore );
 	check\-integrity <boolean>;
 	check\-mx ( fail | warn | ignore );
@@ -689,16 +716,19 @@ zone <string> [ <class> ] {
 	max\-ixfr\-ratio ( unlimited | <percentage> );
 	max\-journal\-size ( default | unlimited | <sizeval> );
 	max\-records <integer>;
+	max\-records\-per\-type <integer>;
 	max\-transfer\-idle\-out <integer>;
 	max\-transfer\-time\-out <integer>;
+	max\-types\-per\-name <integer>;
 	max\-zone\-ttl ( unlimited | <duration> ); // deprecated
 	notify ( explicit | master\-only | primary\-only | <boolean> );
+	notify\-defer <integer>;
 	notify\-delay <integer>;
 	notify\-source ( <ipv4_address> | * );
 	notify\-source\-v6 ( <ipv6_address> | * );
 	notify\-to\-soa <boolean>;
 	nsec3\-test\-zone <boolean>; // test only
-	parental\-agents [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	parental\-agents [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	parental\-source ( <ipv4_address> | * );
 	parental\-source\-v6 ( <ipv6_address> | * );
 	serial\-update\-method ( date | increment | unixtime );
@@ -712,15 +742,13 @@ zone <string> [ <class> ] {
 	zone\-statistics ( full | terse | none | <boolean> );
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	type secondary;
 	allow\-notify { <address_match_element>; ... };
@@ -728,7 +756,7 @@ zone <string> [ <class> ] {
 	allow\-query\-on { <address_match_element>; ... };
 	allow\-transfer [ port <integer> ] [ transport <string> ] { <address_match_element>; ... };
 	allow\-update\-forwarding { <address_match_element>; ... };
-	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	check\-names ( fail | warn | ignore );
 	checkds ( explicit | <boolean> );
 	database <string>;
@@ -751,25 +779,29 @@ zone <string> [ <class> ] {
 	max\-ixfr\-ratio ( unlimited | <percentage> );
 	max\-journal\-size ( default | unlimited | <sizeval> );
 	max\-records <integer>;
+	max\-records\-per\-type <integer>;
 	max\-refresh\-time <integer>;
 	max\-retry\-time <integer>;
 	max\-transfer\-idle\-in <integer>;
 	max\-transfer\-idle\-out <integer>;
 	max\-transfer\-time\-in <integer>;
 	max\-transfer\-time\-out <integer>;
+	max\-types\-per\-name <integer>;
 	min\-refresh\-time <integer>;
 	min\-retry\-time <integer>;
+	min\-transfer\-rate\-in <integer> <integer>;
 	multi\-master <boolean>;
 	notify ( explicit | master\-only | primary\-only | <boolean> );
+	notify\-defer <integer>;
 	notify\-delay <integer>;
 	notify\-source ( <ipv4_address> | * );
 	notify\-source\-v6 ( <ipv6_address> | * );
 	notify\-to\-soa <boolean>;
 	nsec3\-test\-zone <boolean>; // test only
-	parental\-agents [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	parental\-agents [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	parental\-source ( <ipv4_address> | * );
 	parental\-source\-v6 ( <ipv6_address> | * );
-	primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	request\-expire <boolean>;
 	request\-ixfr <boolean>;
 	sig\-signing\-nodes <integer>;
@@ -784,15 +816,13 @@ zone <string> [ <class> ] {
 	zone\-statistics ( full | terse | none | <boolean> );
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	type mirror;
 	allow\-notify { <address_match_element>; ... };
@@ -800,7 +830,7 @@ zone <string> [ <class> ] {
 	allow\-query\-on { <address_match_element>; ... };
 	allow\-transfer [ port <integer> ] [ transport <string> ] { <address_match_element>; ... };
 	allow\-update\-forwarding { <address_match_element>; ... };
-	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	also\-notify [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	check\-names ( fail | warn | ignore );
 	database <string>;
 	file <quoted_string>;
@@ -811,20 +841,24 @@ zone <string> [ <class> ] {
 	max\-ixfr\-ratio ( unlimited | <percentage> );
 	max\-journal\-size ( default | unlimited | <sizeval> );
 	max\-records <integer>;
+	max\-records\-per\-type <integer>;
 	max\-refresh\-time <integer>;
 	max\-retry\-time <integer>;
 	max\-transfer\-idle\-in <integer>;
 	max\-transfer\-idle\-out <integer>;
 	max\-transfer\-time\-in <integer>;
 	max\-transfer\-time\-out <integer>;
+	max\-types\-per\-name <integer>;
 	min\-refresh\-time <integer>;
 	min\-retry\-time <integer>;
+	min\-transfer\-rate\-in <integer> <integer>;
 	multi\-master <boolean>;
 	notify ( explicit | master\-only | primary\-only | <boolean> );
+	notify\-defer <integer>;
 	notify\-delay <integer>;
 	notify\-source ( <ipv4_address> | * );
 	notify\-source\-v6 ( <ipv6_address> | * );
-	primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	request\-expire <boolean>;
 	request\-ixfr <boolean>;
 	transfer\-source ( <ipv4_address> | * );
@@ -834,45 +868,39 @@ zone <string> [ <class> ] {
 	zone\-statistics ( full | terse | none | <boolean> );
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	type forward;
 	forward ( first | only );
 	forwarders [ port <integer> ] [ tls <string> ] { ( <ipv4_address> | <ipv6_address> ) [ port <integer> ] [ tls <string> ]; ... };
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	type hint;
 	check\-names ( fail | warn | ignore );
 	file <quoted_string>;
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	type redirect;
 	allow\-query { <address_match_element>; ... };
@@ -882,20 +910,20 @@ zone <string> [ <class> ] {
 	masterfile\-format ( raw | text );
 	masterfile\-style ( full | relative );
 	max\-records <integer>;
+	max\-records\-per\-type <integer>;
+	max\-types\-per\-name <integer>;
 	max\-zone\-ttl ( unlimited | <duration> ); // deprecated
-	primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	zone\-statistics ( full | terse | none | <boolean> );
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	type static\-stub;
 	allow\-query { <address_match_element>; ... };
@@ -903,20 +931,20 @@ zone <string> [ <class> ] {
 	forward ( first | only );
 	forwarders [ port <integer> ] [ tls <string> ] { ( <ipv4_address> | <ipv6_address> ) [ port <integer> ] [ tls <string> ]; ... };
 	max\-records <integer>;
+	max\-records\-per\-type <integer>;
+	max\-types\-per\-name <integer>;
 	server\-addresses { ( <ipv4_address> | <ipv6_address> ); ... };
 	server\-names { <string>; ... };
 	zone\-statistics ( full | terse | none | <boolean> );
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	type stub;
 	allow\-query { <address_match_element>; ... };
@@ -930,34 +958,34 @@ zone <string> [ <class> ] {
 	masterfile\-format ( raw | text );
 	masterfile\-style ( full | relative );
 	max\-records <integer>;
+	max\-records\-per\-type <integer>;
 	max\-refresh\-time <integer>;
 	max\-retry\-time <integer>;
 	max\-transfer\-idle\-in <integer>;
 	max\-transfer\-time\-in <integer>;
+	max\-types\-per\-name <integer>;
 	min\-refresh\-time <integer>;
 	min\-retry\-time <integer>;
+	min\-transfer\-rate\-in <integer> <integer>;
 	multi\-master <boolean>;
-	primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <remote\-servers> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
+	primaries [ port <integer> ] [ source ( <ipv4_address> | * ) ] [ source\-v6 ( <ipv6_address> | * ) ] { ( <server\-list> | <ipv4_address> [ port <integer> ] | <ipv6_address> [ port <integer> ] ) [ key <string> ] [ tls <string> ]; ... };
 	transfer\-source ( <ipv4_address> | * );
 	transfer\-source\-v6 ( <ipv6_address> | * );
 	zone\-statistics ( full | terse | none | <boolean> );
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 zone <string> [ <class> ] {
 	in\-view <string>;
 };
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH FILES
@@ -969,6 +997,6 @@ zone <string> [ <class> ] {
 .SH AUTHOR
 Internet Systems Consortium
 .SH COPYRIGHT
-2023, Internet Systems Consortium
+2026, Internet Systems Consortium
 .\" Generated by docutils manpage writer.
 .
