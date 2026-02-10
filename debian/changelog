@@ -1,3 +1,9 @@
+bind9 (1:9.20.18-1~deb13u1deepin1) unstable; urgency=medium
+
+  * Disable Build-Dep xindy for sunway.
+
+ -- lichenggang <lichenggang@deepin.org>  Tue, 10 Feb 2026 14:51:53 +0800
+
 bind9 (1:9.20.18-1~deb13u1) trixie-security; urgency=high
 
   * New upstream version 9.20.18
