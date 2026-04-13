@@ -1,3 +1,14 @@
+bind9 (1:9.20.18-1~deb13u1deepin2) unstable; urgency=high
+
+  * Fix CVE-2026-1519: Fix unbounded NSEC3 iterations when validating
+    referrals to unsigned delegations.
+    Upstream: https://gitlab.isc.org/isc-projects/bind9/-/commit/ef01ff31db4be0d737949fd785fa52c491041eb4
+  * Fix CVE-2026-3104: Fix memory leaks in code preparing DNSSEC proofs
+    of non-existence.
+    Upstream: https://gitlab.isc.org/isc-projects/bind9/-/commit/5f15df5c53a445846083c46a9437910f8f6c3127
+
+ -- Security Team <security@deepin.org>  Mon, 13 Apr 2026 11:16:00 +0800
+
 bind9 (1:9.20.18-1~deb13u1deepin1) unstable; urgency=medium
 
   * Disable Build-Dep xindy for sunway.
