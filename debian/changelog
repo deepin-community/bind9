@@ -1,5 +1,17 @@
 bind9 (1:9.20.23-1~deb13u1deepin1) unstable; urgency=medium
 
+  * Security fix (CVE-2026-3593/5946/5947/3039):
+   + [CVE-2026-3593]: Fix use-after-free error in DNS-over-HTTPS when
+     processing HTTP/2 SETTINGS frames.
+   + [CVE-2026-5946]: Disable recursion, UPDATE, and NOTIFY for non-IN
+     views.
+   + [CVE-2026-5947]: Fix crash in resolver when SIG(0)-signed responses
+     are received under load.
+   + [CVE-2026-3039]: Fix GSS-API resource leak when receiving
+     maliciously-constructed packets.
+    Generated-By: Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    Co-Authored-By: hudeng <hudeng@deepin.org>
+
   [ lichenggang ]
   * Disable Build-Dep xindy for sunway.
 
