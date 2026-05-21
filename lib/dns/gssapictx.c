@@ -607,7 +607,14 @@ dst_gssapi_initctx(const dns_name_t *name, isc_buffer_t *intoken,
 		GSS_SPNEGO_MECHANISM, flags, 0, NULL, gintokenp, NULL,
 		&gouttoken, &ret_flags, NULL);
 
-	if (gret != GSS_S_COMPLETE && gret != GSS_S_CONTINUE_NEEDED) {
+	switch (gret) {
+	case GSS_S_COMPLETE:
+		result = ISC_R_SUCCESS;
+		break;
+	case GSS_S_CONTINUE_NEEDED:
+		result = DNS_R_CONTINUE;
+		break;
+	default:
 		gss_err_message(mctx, gret, minor, err_message);
 		if (err_message != NULL && *err_message != NULL) {
 			gss_log(3, "Failure initiating security context: %s",
@@ -630,12 +637,6 @@ dst_gssapi_initctx(const dns_name_t *name, isc_buffer_t *intoken,
 	if (gouttoken.length != 0U) {
 		GBUFFER_TO_REGION(gouttoken, r);
 		CHECK(isc_buffer_copyregion(outtoken, &r));
-	}
-
-	if (gret == GSS_S_COMPLETE) {
-		result = ISC_R_SUCCESS;
-	} else {
-		result = DNS_R_CONTINUE;
 	}
 
 cleanup:
