@@ -1,2 +1,6 @@
 0001-Disable-treat-warnings-as-errors-in-sphinx-build.patch
 0002-Disable-RTLD_DEEPBIND-in-Samba-DLZ-module.patch
+CVE-2026-3593-DNS-over-HTTPS-use-after-free.patch
+CVE-2026-5946-non-IN-views.patch
+CVE-2026-5947-SIG0-use-after-free.patch
+CVE-2026-3039-GSS-API-resource-leak.patch
