@@ -2,3 +2,4 @@
 0002-Disable-RTLD_DEEPBIND-in-Samba-DLZ-module.patch
 CVE-2026-13204.patch
 CVE-2026-12617.patch
+CVE-2026-11622.patch
