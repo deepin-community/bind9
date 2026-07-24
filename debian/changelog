@@ -1,3 +1,9 @@
+bind9 (1:9.20.23-1~deb13u1deepin4) unstable; urgency=medium
+
+  * fix(cve): CVE-2026-11622
+
+ -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 09:43:15 +0800
+
 bind9 (1:9.20.23-1~deb13u1deepin3) unstable; urgency=medium
 
   * fix(cve): CVE-2026-12617
