@@ -1,11 +1,2 @@
 0001-Disable-treat-warnings-as-errors-in-sphinx-build.patch
 0002-Disable-RTLD_DEEPBIND-in-Samba-DLZ-module.patch
-CVE-2026-13204.patch
-CVE-2026-12617.patch
-CVE-2026-11622.patch
-CVE-2026-13321.patch
-CVE-2026-11605.patch
-CVE-2026-11331.patch
-CVE-2026-10822.patch
-CVE-2026-10723.patch
-CVE-2026-11721.patch
