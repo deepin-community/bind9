@@ -1,63 +1,22 @@
-bind9 (1:9.20.23-1~deb13u1deepin10) unstable; urgency=medium
+bind9 (1:9.20.26-1~deb13u1) trixie-security; urgency=high
 
-  * fix(cve): CVE-2026-11721
+  * New upstream version 9.20.26
+   + [CVE-2026-10723]: Correct verification of NSEC3 signer name.
+   + [CVE-2026-10822]: Malformed DNSKEY records could trigger an
+     assertion.
+   + [CVE-2026-11331]: Fix handling of RPZ CNAME expansion that returns
+     too-long name.
+   + [CVE-2026-11605]: Prevent excessive validation work from crafted
+     negative responses.
+   + [CVE-2026-11622]: Prevent cache exhaustion under sustained attack.
+   + [CVE-2026-11721]: Stop accepting invalid signed wildcard records.
+   + [CVE-2026-12617]: Do not assert for some specific CNAME and DNAME
+     queries.
+   + [CVE-2026-13204]: Prevent crash from malformed NSEC/NSEC3 response.
+   + [CVE-2026-13321]: Fix DNSSEC validation bypass via out-of-zone NSEC
+     Next Field.
 
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 13:43:09 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin9) unstable; urgency=medium
-
-  * fix(cve): CVE-2026-10723
-
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 13:19:22 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin8) unstable; urgency=medium
-
-  * fix(cve): CVE-2026-10822
-
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 10:18:02 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin7) unstable; urgency=medium
-
-  * fix(cve): CVE-2026-11331
-
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 10:10:36 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin6) unstable; urgency=medium
-
-  * fix(cve): CVE-2026-11605
-
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 10:05:17 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin5) unstable; urgency=medium
-
-  * fix(cve): CVE-2026-13321
-
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 09:52:54 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin4) unstable; urgency=medium
-
-  * fix(cve): CVE-2026-11622
-
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 09:43:15 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin3) unstable; urgency=medium
-
-  * fix(cve): CVE-2026-12617
-
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 09:37:32 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin2) unstable; urgency=medium
-
-  * fix(cve): CVE-2026-13204
-
- -- deepin-ci-robot <packages@deepin.org>  Fri, 24 Jul 2026 09:26:55 +0800
-
-bind9 (1:9.20.23-1~deb13u1deepin1) unstable; urgency=medium
-
-  [ lichenggang ]
-  * Disable Build-Dep xindy for sunway.
-
- -- Tianyu Chen <sweetyfish@deepin.org>  Thu, 21 May 2026 15:38:10 +0800
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 21 Jul 2026 15:09:54 +0200
 
 bind9 (1:9.20.23-1~deb13u1) trixie-security; urgency=high
 
