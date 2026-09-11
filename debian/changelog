@@ -1,3 +1,9 @@
+bind9 (1:9.20.23-1~deb13u1deepin11) unstable; urgency=medium
+
+  * Rebuild with LTO enabled (dpkg vendor feature optimize/lto).
+
+ -- tunaichao <tunaichao@uniontech.com>  Fri, 11 Sep 2026 10:01:32 +0800
+
 bind9 (1:9.20.23-1~deb13u1deepin10) unstable; urgency=medium
 
   * fix(cve): CVE-2026-11721
