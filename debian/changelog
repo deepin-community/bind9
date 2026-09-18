@@ -14,6 +14,9 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
     additional-data lookups fail   Upstream:
     https://github.com/CVEProject/cvelistV5/commit/3da381e3163f31ce28407
     ba16d4a5b2277cd5f26
+  * fix(cve): CVE-2026-19941 (medium) - [PATCH] Require NSEC wildcard
+    proofs from the same zone   Upstream: https://github.com/isc-
+    projects/bind9/commit/ac43c3163839ef171a8ca0376291f97bc8ea9487
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
