@@ -5,6 +5,11 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
   * fix(cve): CVE-2026-77692 (high) - Fix an unauthenticated crash on
     HTTPS using SIG(0)   Upstream: https://github.com/isc-
     projects/bind9/commit/d1c25323509173e4d65785e1d1781de77bf461a6.patch
+  * fix(cve): CVE-2026-19666 (high) - [PATCH 1/2] Clear the noqname
+    alias on the DNS64 filter64 path   Upstream: https://github.com/isc-
+    projects/bind9/commit/9ddfd2e4da7374ab2f6eaa67cd48d99116a8f60e,https
+    ://github.com/isc-
+    projects/bind9/commit/bc4a9ce4d3940f1c5f02f885253e7fbe201de7c4
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
