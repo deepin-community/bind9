@@ -2,6 +2,9 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
 
   * fix(cve): CVE-2026-76163 (high) - Always create the TKEY context
     Upstream: https://github.com/isc-projects/bind9/commit/4a48f9b73f
+  * fix(cve): CVE-2026-77692 (high) - Fix an unauthenticated crash on
+    HTTPS using SIG(0)   Upstream: https://github.com/isc-
+    projects/bind9/commit/d1c25323509173e4d65785e1d1781de77bf461a6.patch
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
