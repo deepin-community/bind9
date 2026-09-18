@@ -10,6 +10,10 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
     projects/bind9/commit/9ddfd2e4da7374ab2f6eaa67cd48d99116a8f60e,https
     ://github.com/isc-
     projects/bind9/commit/bc4a9ce4d3940f1c5f02f885253e7fbe201de7c4
+  * fix(cve): CVE-2026-81563 (high) - Release the rdataset when SVCB
+    additional-data lookups fail   Upstream:
+    https://github.com/CVEProject/cvelistV5/commit/3da381e3163f31ce28407
+    ba16d4a5b2277cd5f26
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
