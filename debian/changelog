@@ -17,6 +17,10 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
   * fix(cve): CVE-2026-19941 (medium) - [PATCH] Require NSEC wildcard
     proofs from the same zone   Upstream: https://github.com/isc-
     projects/bind9/commit/ac43c3163839ef171a8ca0376291f97bc8ea9487
+  * fix(cve): CVE-2026-77119 (medium) - [CVE-2026-77119] sec: usr:
+    Prevent a DNSSEC downgrade of secure delegations via unrelated NSEC3
+    Upstream: https://github.com/isc-
+    projects/bind9/commit/f76b3440b4133337a1794abefe7655becd483118
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
