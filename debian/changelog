@@ -21,6 +21,9 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
     Prevent a DNSSEC downgrade of secure delegations via unrelated NSEC3
     Upstream: https://github.com/isc-
     projects/bind9/commit/f76b3440b4133337a1794abefe7655becd483118
+  * fix(cve): CVE-2026-75029 (medium) - Skip duplicate singleton records
+    Upstream: https://github.com/isc-
+    projects/bind9/commit/905f6cc0a3f5347eb849b33fdbe4898e2445e47d.patch
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
