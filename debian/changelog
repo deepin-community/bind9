@@ -1,3 +1,39 @@
+bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
+
+  * fix(cve): CVE-2026-76163 (high) - Always create the TKEY context
+    Upstream: https://github.com/isc-projects/bind9/commit/4a48f9b73f
+  * fix(cve): CVE-2026-77692 (high) - Fix an unauthenticated crash on
+    HTTPS using SIG(0)   Upstream: https://github.com/isc-
+    projects/bind9/commit/d1c25323509173e4d65785e1d1781de77bf461a6.patch
+  * fix(cve): CVE-2026-19666 (high) - [PATCH 1/2] Clear the noqname
+    alias on the DNS64 filter64 path   Upstream: https://github.com/isc-
+    projects/bind9/commit/9ddfd2e4da7374ab2f6eaa67cd48d99116a8f60e,https
+    ://github.com/isc-
+    projects/bind9/commit/bc4a9ce4d3940f1c5f02f885253e7fbe201de7c4
+  * fix(cve): CVE-2026-81563 (high) - Release the rdataset when SVCB
+    additional-data lookups fail   Upstream:
+    https://github.com/CVEProject/cvelistV5/commit/3da381e3163f31ce28407
+    ba16d4a5b2277cd5f26
+  * fix(cve): CVE-2026-19941 (medium) - [PATCH] Require NSEC wildcard
+    proofs from the same zone   Upstream: https://github.com/isc-
+    projects/bind9/commit/ac43c3163839ef171a8ca0376291f97bc8ea9487
+  * fix(cve): CVE-2026-77119 (medium) - [CVE-2026-77119] sec: usr:
+    Prevent a DNSSEC downgrade of secure delegations via unrelated NSEC3
+    Upstream: https://github.com/isc-
+    projects/bind9/commit/f76b3440b4133337a1794abefe7655becd483118
+  * fix(cve): CVE-2026-75029 (medium) - Skip duplicate singleton records
+    Upstream: https://github.com/isc-
+    projects/bind9/commit/905f6cc0a3f5347eb849b33fdbe4898e2445e47d.patch
+  * fix(cve): CVE-2026-19668 (medium) - [CVE-2026-19668] sec: usr:
+    Prevent excessive CPU use validating crafted DNSSEC responses
+    Upstream: https://github.com/isc-
+    projects/bind9/commit/8d660756e89e896b6f54ede08a96578c9f011c2a
+  * fix(cve): CVE-2026-19033 (medium) - Remove support for sparse TSIG
+    Upstream: https://github.com/isc-
+    projects/bind9/commit/fa351e24e2f97777a3087a9f91998e22cd336deb.patch
+
+ -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
+
 bind9 (1:9.20.23-1~deb13u1deepin11) unstable; urgency=medium
 
   * Rebuild with LTO enabled (dpkg vendor feature optimize/lto).
