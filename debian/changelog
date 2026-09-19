@@ -28,6 +28,9 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
     Prevent excessive CPU use validating crafted DNSSEC responses
     Upstream: https://github.com/isc-
     projects/bind9/commit/8d660756e89e896b6f54ede08a96578c9f011c2a
+  * fix(cve): CVE-2026-19033 (medium) - Remove support for sparse TSIG
+    Upstream: https://github.com/isc-
+    projects/bind9/commit/fa351e24e2f97777a3087a9f91998e22cd336deb.patch
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
