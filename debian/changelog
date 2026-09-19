@@ -24,6 +24,10 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
   * fix(cve): CVE-2026-75029 (medium) - Skip duplicate singleton records
     Upstream: https://github.com/isc-
     projects/bind9/commit/905f6cc0a3f5347eb849b33fdbe4898e2445e47d.patch
+  * fix(cve): CVE-2026-19668 (medium) - [CVE-2026-19668] sec: usr:
+    Prevent excessive CPU use validating crafted DNSSEC responses
+    Upstream: https://github.com/isc-
+    projects/bind9/commit/8d660756e89e896b6f54ede08a96578c9f011c2a
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
