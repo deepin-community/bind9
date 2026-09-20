@@ -1,3 +1,18 @@
+bind9 (1:9.20.23-1~deb13u1deepin13) unstable; urgency=medium
+
+  * fix(cve): CVE-2026-80274 (high) - Keep NOQNAME proof selection
+    consistent   Upstream: https://github.com/isc-
+    projects/bind9/commit/49f35a0d4d20737b2c2be77b0bf208d3078113ef.patch
+  * fix(cve): CVE-2026-81736 (high) - [PATCH 1/2] Bound the total
+    additional processing for a single query   Upstream:
+    https://github.com/isc-
+    projects/bind9/commit/7fd25ab3b55b1f514a363ffce2735b42b7b361c9.patch
+  * fix(cve): CVE-2026-19667 (high) - Reject negative cache records that
+    do not fit in a dns_rdata_t   Upstream: https://github.com/isc-
+    projects/bind9/commit/8b20ed0a647cd1e9efc3bf442fc5d898f6a4de57
+
+ -- deepin-ci-robot <packages@deepin.org>  Sun, 20 Sep 2026 22:43:14 +0800
+
 bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
 
   [ deepin-ci-robot ]
