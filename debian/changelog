@@ -1,5 +1,6 @@
 bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
 
+  [ deepin-ci-robot ]
   * fix(cve): CVE-2026-76163 (high) - Always create the TKEY context
     Upstream: https://github.com/isc-projects/bind9/commit/4a48f9b73f
   * fix(cve): CVE-2026-77692 (high) - Fix an unauthenticated crash on
@@ -31,6 +32,19 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
   * fix(cve): CVE-2026-19033 (medium) - Remove support for sparse TSIG
     Upstream: https://github.com/isc-
     projects/bind9/commit/fa351e24e2f97777a3087a9f91998e22cd336deb.patch
+
+  [ lichenggang ]
+  * fix(cve): complete the CVE-2026-77119 backport - require the NSEC3
+    owner zone to enclose the DS name; the label-depth check alone let
+    an NSEC3 from an unrelated sibling zone downgrade a secure
+    delegation
+  * fix(cve): CVE-2026-81563 - guard the rdataset release on the SVCB
+    additional-data error paths with dns_rdataset_isassociated()
+  * fix(cve): CVE-2026-19668 - restore the per-DS validation quota
+    charging from upstream patch 3/4
+  * test: register tests/dns/message_test in Makefile.am for CVE-2026-
+    75029 and adapt the CVE-2026-19941 and CVE-2026-77692 system tests
+    to the 9.20 test harness
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
