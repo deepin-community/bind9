@@ -45,6 +45,9 @@ bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
   * test: register tests/dns/message_test in Makefile.am for CVE-2026-
     75029 and adapt the CVE-2026-19941 and CVE-2026-77692 system tests
     to the 9.20 test harness
+  * fix(cve): CVE-2026-19668 - also restore upstream patch 2/4, making
+    an exhausted validation quota terminal in the fetch callbacks and in
+    validated(), so the fetch is no longer retried
 
  -- deepin-ci-robot <packages@deepin.org>  Fri, 18 Sep 2026 20:09:05 +0800
 
