@@ -1,3 +1,11 @@
+bind9 (1:9.20.23-1~deb13u1deepin13) unstable; urgency=medium
+
+  * fix(cve): CVE-2026-80274 (high) - Keep NOQNAME proof selection
+    consistent   Upstream: https://github.com/isc-
+    projects/bind9/commit/49f35a0d4d20737b2c2be77b0bf208d3078113ef.patch
+
+ -- deepin-ci-robot <packages@deepin.org>  Sun, 20 Sep 2026 22:43:14 +0800
+
 bind9 (1:9.20.23-1~deb13u1deepin12) unstable; urgency=medium
 
   [ deepin-ci-robot ]
