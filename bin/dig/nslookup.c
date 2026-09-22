@@ -808,7 +808,7 @@ do_next_command(char *input) {
 	}
 }
 
-static void
+static isc_result_t
 readline_next_command(void *arg) {
 	char *ptr = NULL;
 
@@ -818,7 +818,7 @@ readline_next_command(void *arg) {
 	ptr = readline("> ");
 	isc_loopmgr_nonblocking(loopmgr);
 	if (ptr == NULL) {
-		return;
+		return ISC_R_SUCCESS;
 	}
 
 	if (*ptr != 0) {
@@ -827,13 +827,17 @@ readline_next_command(void *arg) {
 		cmdline = cmdlinebuf;
 	}
 	free(ptr);
+
+	return ISC_R_SUCCESS;
 }
 
-static void
+static isc_result_t
 fgets_next_command(void *arg) {
 	UNUSED(arg);
 
 	cmdline = fgets(cmdlinebuf, COMMSIZE, stdin);
+
+	return ISC_R_SUCCESS;
 }
 
 noreturn static void
@@ -889,7 +893,8 @@ static void
 start_next_command(void);
 
 static void
-process_next_command(void *arg ISC_ATTR_UNUSED) {
+process_next_command(void *arg ISC_ATTR_UNUSED,
+		     isc_result_t result ISC_ATTR_UNUSED) {
 	isc_loop_t *loop = isc_loop_main(loopmgr);
 	if (cmdline == NULL) {
 		in_use = false;
@@ -916,11 +921,11 @@ start_next_command(void) {
 
 	isc_loopmgr_pause(loopmgr);
 	if (interactive) {
-		isc_work_enqueue(loop, readline_next_command,
+		isc_work_enqueue(loop, ISC_WORKLANE_FAST, readline_next_command,
 				 process_next_command, loop);
 	} else {
-		isc_work_enqueue(loop, fgets_next_command, process_next_command,
-				 loop);
+		isc_work_enqueue(loop, ISC_WORKLANE_FAST, fgets_next_command,
+				 process_next_command, loop);
 	}
 	isc_loopmgr_resume(loopmgr);
 }
