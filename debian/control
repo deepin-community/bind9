@@ -37,7 +37,7 @@ Build-Depends-Indep: fonts-freefont-otf,
                      texlive-fonts-extra,
                      texlive-latex-recommended,
                      texlive-xetex,
-                     xindy
+                     xindy [!sw64]
 Standards-Version: 4.6.2
 Vcs-Browser: https://salsa.debian.org/dns-team/bind9
 Vcs-Git: https://salsa.debian.org/dns-team/bind9.git -b debian/9.20
