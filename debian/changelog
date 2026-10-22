@@ -1,3 +1,14 @@
+bind9 (1:9.20.29-1~deb13u1deepin2) unstable; urgency=medium
+
+  * fix(cve): CVE-2026-96888 (high) - Handle qname-minimization failures
+    gracefully when redirecting   Upstream:
+    https://github.com/isc-projects/bind9/commit/1e1d0d42b596de096336244a7612782
+    9d4f1ea36
+  * CVE-2026-80274, CVE-2026-81736 and CVE-2026-19667 are already fixed in
+    the upstream 9.20.29 import, so their Debian patches are not carried.
+
+ -- deepin-ci-robot <packages@deepin.org>  Thu, 22 Oct 2026 19:50:00 +0800
+
 bind9 (1:9.20.29-1~deb13u1deepin1) unstable; urgency=medium
 
   * Disable Build-Dep xindy for sunway.
