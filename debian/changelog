@@ -6,6 +6,10 @@ bind9 (1:9.20.29-1~deb13u1deepin3) unstable; urgency=medium
   * fix(cve): CVE-2026-94300 (high) - Serialize access to the shared
     GSS-TSIG security context   Upstream: https://github.com/isc-
     projects/bind9/commit/fe9cc14af0d006221e744d778b83c879135c1b74.patch
+  * fix(cve): CVE-2026-19630 (high) - Limit how many compression
+    pointers a message may make us follow   Upstream:
+    https://github.com/isc-
+    projects/bind9/commit/b606d21aafd528d64d87e613d3cc86ceb9ba1dc9
 
  -- deepin-ci-robot <packages@deepin.org>  Thu, 22 Oct 2026 22:31:20 +0800
 
